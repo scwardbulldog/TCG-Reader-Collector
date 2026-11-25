@@ -1,6 +1,6 @@
 # TCG Reader Collector
 
-A personal Android app that inventories One Piece cards by scanning them. See [the v1 spec](docs/spec/v1.md) and [GLOSSARY.md](GLOSSARY.md).
+A personal Android app that inventories One Piece cards by scanning them. See [the v1 spec](docs/spec/v1.md), [the Catalog file format](docs/catalog-format.md) and [GLOSSARY.md](GLOSSARY.md).
 
 ## Layout
 
