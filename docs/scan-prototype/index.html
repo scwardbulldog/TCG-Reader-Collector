@@ -1,0 +1,143 @@
+<!doctype html>
+<!-- PROTOTYPE (throwaway): web card-number scanning spike for wayfinder ticket #4. Not production code. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>PROTOTYPE Scan Spike (web)</title>
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+<style>
+  body{margin:0;font:14px system-ui,sans-serif;background:#111;color:#eee}
+  #banner{background:#b30;color:#fff;text-align:center;padding:2px;font-size:11px}
+  #stage{position:relative;width:100%;aspect-ratio:3/4;background:#000;overflow:hidden}
+  video{width:100%;height:100%;object-fit:cover}
+  #guide{position:absolute;border:2px dashed #0f0;left:50%;top:50%;transform:translate(-50%,-50%);height:88%;aspect-ratio:63/88}
+  #roi{position:absolute;border:2px solid #ff0;pointer-events:none}
+  #locked{font-size:34px;font-weight:700;text-align:center;padding:6px;min-height:44px}
+  .row{display:flex;gap:6px;padding:4px 8px;flex-wrap:wrap}
+  button,select{font-size:15px;padding:10px;border-radius:8px;border:0;background:#333;color:#eee;flex:1}
+  .ok{background:#185}.bad{background:#a22}.miss{background:#a70}
+  pre{white-space:pre-wrap;font-size:11px;margin:4px 8px;background:#222;padding:6px;max-height:140px;overflow:auto}
+  canvas#crop{display:block;margin:4px 8px;max-width:calc(100% - 16px);background:#222}
+  #tally{padding:4px 8px;font-weight:600}
+</style>
+</head>
+<body>
+<div id="banner">PROTOTYPE — throwaway spike, in-memory only</div>
+<div id="stage"><video id="v" playsinline muted autoplay></video><div id="guide"></div><div id="roi"></div></div>
+<div id="locked">—</div>
+<div class="row">
+  <select id="engine"><option value="tess">Tesseract.js</option><option value="td">Chrome TextDetector</option></select>
+  <select id="roiMode"><option value="bottom">ROI: bottom strip</option><option value="card">ROI: whole card</option></select>
+  <button id="torch">Torch</button>
+</div>
+<div class="row">
+  <button id="start">Start camera</button>
+  <button class="ok" id="bOk">✓ Correct</button><button class="bad" id="bBad">✗ Wrong</button><button class="miss" id="bMiss">Missed</button>
+</div>
+<div id="tally">0 scanned</div>
+<div class="row"><button id="copy">Copy CSV</button><button id="reset">Reset card</button></div>
+<pre id="state"></pre>
+<canvas id="crop"></canvas>
+<pre id="log"></pre>
+<script>
+const $ = id => document.getElementById(id);
+const v = $('v'), crop = $('crop'), cx = crop.getContext('2d', {willReadFrequently: true});
+const N_STABLE = 3;
+let track, worker, td = null, running = false, torchOn = false;
+let card = freshCard(), results = [];
+function freshCard(){ return {firstSeen: null, last: null, streak: 0, locked: null, raw: '', lockMs: null, lat: []}; }
+
+const RE = /\b(OP|ST|EB|PRB)(\d{2})-(\d{3})\b|\bP-(\d{3})\b/;
+function normalize(t){
+  // Fix common OCR confusions in the digit portions only.
+  const fixDigits = s => s.replace(/[Oo]/g,'0').replace(/[Il|]/g,'1').replace(/S/g,'5').replace(/B/g,'8');
+  t = t.replace(/[–—_=~]/g,'-').toUpperCase().replace(/\s*-\s*/g,'-');
+  t = t.replace(/\b(0P|OP|5T|ST|E8|EB|PR8|PRB)([0-9OISB]{2})-([0-9OISB|]{3})\b/g,
+    (_, p, a, b) => p.replace('0P','OP').replace('5T','ST').replace('E8','EB').replace('PR8','PRB') + fixDigits(a) + '-' + fixDigits(b));
+  t = t.replace(/\bP-([0-9OISB|]{3})\b/g, (_, b) => 'P-' + fixDigits(b));
+  return t;
+}
+function parse(text){ const m = normalize(text).match(RE); return m ? m[0] : null; }
+
+function roiRect(){
+  // Guide box in video pixel space (object-fit: cover math), then ROI inside it.
+  const vw = v.videoWidth, vh = v.videoHeight, sw = v.clientWidth, sh = v.clientHeight;
+  const scale = Math.max(sw / vw, sh / vh), ox = (vw * scale - sw) / 2, oy = (vh * scale - sh) / 2;
+  const g = $('guide').getBoundingClientRect(), s = $('stage').getBoundingClientRect();
+  const gx = (g.left - s.left + ox) / scale, gy = (g.top - s.top + oy) / scale, gw = g.width / scale, gh = g.height / scale;
+  const r = $('roiMode').value === 'bottom' ? {x: gx + gw*0.35, y: gy + gh*0.82, w: gw*0.65, h: gh*0.18} : {x: gx, y: gy, w: gw, h: gh};
+  const el = $('roi').style;
+  el.left = (r.x*scale - ox) + 'px'; el.top = (r.y*scale - oy) + 'px'; el.width = r.w*scale + 'px'; el.height = r.h*scale + 'px';
+  return r;
+}
+function grab(){
+  const r = roiRect(), up = r.w < 900 ? 2 : 1;
+  crop.width = Math.round(r.w * up); crop.height = Math.round(r.h * up);
+  cx.drawImage(v, r.x, r.y, r.w, r.h, 0, 0, crop.width, crop.height);
+  const img = cx.getImageData(0, 0, crop.width, crop.height), d = img.data;
+  let lo = 255, hi = 0;
+  for (let i = 0; i < d.length; i += 4){ const y = (d[i]*299 + d[i+1]*587 + d[i+2]*114) / 1000; d[i] = y; if (y < lo) lo = y; if (y > hi) hi = y; }
+  const k = 255 / Math.max(1, hi - lo);
+  for (let i = 0; i < d.length; i += 4){ const y = (d[i] - lo) * k; d[i] = d[i+1] = d[i+2] = y; }
+  cx.putImageData(img, 0, 0);
+}
+async function ocr(){
+  if ($('engine').value === 'td'){
+    if (!td) throw new Error('TextDetector unavailable (enable chrome://flags/#enable-experimental-web-platform-features)');
+    return (await td.detect(crop)).map(b => b.rawValue).join('\n');
+  }
+  return (await worker.recognize(crop)).data.text;
+}
+async function loop(){
+  while (running){
+    if (card.locked || v.readyState < 2){ await new Promise(r => setTimeout(r, 100)); continue; }
+    grab();
+    const t0 = performance.now(); let text = '';
+    try { text = await ocr(); } catch (e){ $('state').textContent = 'ERROR: ' + e.message; await new Promise(r => setTimeout(r, 1000)); continue; }
+    const ms = performance.now() - t0; card.lat.push(ms);
+    const num = parse(text);
+    if (num){
+      card.firstSeen ??= t0;
+      card.streak = num === card.last ? card.streak + 1 : 1; card.last = num; card.raw = text.trim();
+      if (card.streak >= N_STABLE){ card.locked = num; card.lockMs = Math.round(performance.now() - card.firstSeen); navigator.vibrate?.(60); }
+    }
+    render(text, ms);
+  }
+}
+function render(text = '', ms = 0){
+  $('locked').textContent = card.locked ? `${card.locked}  (${card.lockMs} ms)` : (card.last ? `${card.last} …${card.streak}/${N_STABLE}` : '—');
+  $('state').textContent = JSON.stringify({engine: $('engine').value, frameMs: Math.round(ms), avgFrameMs: avg(card.lat), frames: card.lat.length,
+    streak: card.streak, candidate: card.last, locked: card.locked, lockMs: card.lockMs, torch: torchOn,
+    video: `${v.videoWidth}x${v.videoHeight}`, textDetector: !!td, rawOcr: text.trim()}, null, 1);
+}
+const avg = a => a.length ? Math.round(a.reduce((x, y) => x + y, 0) / a.length) : null;
+const median = a => { if (!a.length) return null; const s = [...a].sort((x, y) => x - y); return s[Math.floor(s.length / 2)]; };
+function record(verdict){
+  results.push({i: results.length + 1, engine: $('engine').value, roi: $('roiMode').value, locked: card.locked ?? card.last ?? '',
+    raw: (card.raw || '').replace(/\s+/g, ' '), lockMs: card.lockMs ?? '', avgFrameMs: avg(card.lat) ?? '', verdict, torch: torchOn});
+  const ok = results.filter(r => r.verdict === 'correct').length, bad = results.filter(r => r.verdict === 'wrong').length;
+  $('tally').textContent = `${results.length} scanned · ✓${ok} ✗${bad} missed ${results.length - ok - bad} · accuracy ${Math.round(100 * ok / results.length)}% · median lock ${median(results.filter(r => r.lockMs !== '').map(r => r.lockMs))} ms`;
+  $('log').textContent = toCsv();
+  card = freshCard(); render();
+}
+function toCsv(){ const h = ['i','engine','roi','locked','raw','lockMs','avgFrameMs','verdict','torch']; return [h.join(','), ...results.map(r => h.map(k => JSON.stringify(r[k] ?? '')).join(','))].join('\n'); }
+
+$('start').onclick = async () => {
+  $('start').textContent = 'Loading…';
+  const stream = await navigator.mediaDevices.getUserMedia({audio: false, video: {facingMode: {ideal: 'environment'}, width: {ideal: 1920}, height: {ideal: 1080}}});
+  v.srcObject = stream; track = stream.getVideoTracks()[0];
+  try { await track.applyConstraints({advanced: [{focusMode: 'continuous'}]}); } catch {}
+  if ('TextDetector' in window) try { td = new TextDetector(); } catch {}
+  worker = await Tesseract.createWorker('eng');
+  await worker.setParameters({tessedit_char_whitelist: 'OPSTEBR0123456789-', tessedit_pageseg_mode: '11'});
+  $('start').textContent = 'Running'; running = true; loop();
+};
+$('torch').onclick = async () => { if (!track) return; torchOn = !torchOn; try { await track.applyConstraints({advanced: [{torch: torchOn}]}); } catch { torchOn = false; alert('Torch not supported'); } render(); };
+$('bOk').onclick = () => record('correct'); $('bBad').onclick = () => record('wrong'); $('bMiss').onclick = () => record('missed');
+$('reset').onclick = () => { card = freshCard(); render(); };
+$('copy').onclick = () => navigator.clipboard.writeText(toCsv()).then(() => alert('CSV copied'));
+$('roiMode').onchange = () => { card = freshCard(); render(); };
+</script>
+</body>
+</html>
