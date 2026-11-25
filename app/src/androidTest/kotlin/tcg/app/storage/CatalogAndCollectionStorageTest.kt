@@ -1,0 +1,133 @@
+package tcg.app.storage
+
+import androidx.test.core.app.ApplicationProvider
+import kotlinx.coroutines.test.runTest
+import org.junit.After
+import org.junit.Before
+import org.junit.Test
+import tcg.domain.CatalogStore
+import tcg.domain.CollectionStore
+import tcg.domain.Condition
+import tcg.domain.DeleteLocationResult
+import tcg.domain.Location
+import tcg.domain.Game
+import tcg.domain.Language
+import tcg.domain.NewOwnedCopy
+import tcg.domain.Printing
+import tcg.domain.PrintingIdentifier
+import kotlin.test.assertEquals
+import kotlin.test.assertNotNull
+import kotlin.test.assertNull
+
+class CatalogAndCollectionStorageTest {
+    private lateinit var db: AppDatabase
+    private lateinit var catalog: CatalogStore
+    private lateinit var collection: CollectionStore
+
+    @Before
+    fun setUp() {
+        db = AppDatabase.inMemory(ApplicationProvider.getApplicationContext())
+        catalog = db.catalogStore()
+        collection = db.collectionStore()
+    }
+
+    @After
+    fun tearDown() = db.close()
+
+    @Test
+    fun replacing_catalog_rows_leaves_every_owned_copy_unchanged() = runTest {
+        val zoro = PrintingIdentifier(Game.OnePiece, Language.English, "OP01-001_p1")
+        catalog.replaceCatalog(Game.OnePiece, Language.English, listOf(printing(zoro)))
+        collection.add(NewOwnedCopy(zoro, notes = "sleeved"))
+        val before = collection.ownedCopies(zoro)
+
+        catalog.replaceCatalog(Game.OnePiece, Language.English, emptyList())
+
+        assertNull(catalog.find(zoro))
+        assertEquals(before, collection.ownedCopies(zoro))
+    }
+
+    @Test
+    fun an_owned_copy_can_reference_a_printing_absent_from_the_catalog() = runTest {
+        val unknown = PrintingIdentifier(Game.OnePiece, Language.Japanese, "OP99-999")
+
+        val copy = collection.add(NewOwnedCopy(unknown))
+
+        assertNotNull(copy)
+        assertEquals(listOf(copy), collection.ownedCopies(unknown))
+    }
+
+    @Test
+    fun a_new_owned_copy_defaults_to_near_mint() = runTest {
+        val id = PrintingIdentifier(Game.OnePiece, Language.English, "OP01-001")
+
+        val copy = collection.add(NewOwnedCopy(id))
+
+        assertEquals(Condition.NearMint, copy.condition)
+        assertEquals(Condition.NearMint, collection.ownedCopies(id).single().condition)
+    }
+
+    @Test
+    fun counts_are_derived_per_printing_and_keep_languages_separate() = runTest {
+        val en = PrintingIdentifier(Game.OnePiece, Language.English, "OP01-001")
+        val jp = PrintingIdentifier(Game.OnePiece, Language.Japanese, "OP01-001")
+        collection.add(NewOwnedCopy(en))
+        collection.add(NewOwnedCopy(en))
+        collection.add(NewOwnedCopy(jp))
+
+        assertEquals(mapOf(en to 2, jp to 1), collection.countsByPrinting())
+    }
+
+    @Test
+    fun the_same_bandai_id_in_two_languages_is_two_printings() = runTest {
+        val en = PrintingIdentifier(Game.OnePiece, Language.English, "OP01-001_p1")
+        val jp = PrintingIdentifier(Game.OnePiece, Language.Japanese, "OP01-001_p1")
+        catalog.replaceCatalog(Game.OnePiece, Language.English, listOf(printing(en).copy(name = "EN Zoro")))
+        catalog.replaceCatalog(Game.OnePiece, Language.Japanese, listOf(printing(jp).copy(name = "JP Zoro")))
+
+        assertEquals("EN Zoro", catalog.find(en)?.name)
+        assertEquals("JP Zoro", catalog.find(jp)?.name)
+        assertEquals(listOf(en), catalog.findByBaseNumber(Game.OnePiece, Language.English, "OP01-001").map { it.identifier })
+    }
+
+    @Test
+    fun renaming_a_location_applies_to_every_owned_copy_in_it() = runTest {
+        val id = PrintingIdentifier(Game.OnePiece, Language.English, "OP01-001")
+        val binder = collection.createLocation("Binder 1")
+        collection.add(NewOwnedCopy(id, location = binder.id))
+        collection.add(NewOwnedCopy(id, location = binder.id))
+
+        collection.renameLocation(binder.id, "Binder One")
+
+        assertEquals(listOf(Location(binder.id, "Binder One")), collection.locations())
+        assertEquals(listOf(binder.id, binder.id), collection.ownedCopies(id).map { it.location })
+    }
+
+    @Test
+    fun an_empty_location_can_be_deleted() = runTest {
+        val bulk = collection.createLocation("Bulk box A")
+
+        assertEquals(DeleteLocationResult.Deleted, collection.deleteLocation(bulk.id))
+        assertEquals(emptyList(), collection.locations())
+    }
+
+    @Test
+    fun a_location_holding_an_owned_copy_cannot_be_deleted() = runTest {
+        val id = PrintingIdentifier(Game.OnePiece, Language.English, "OP01-001")
+        val binder = collection.createLocation("Binder 1")
+        collection.add(NewOwnedCopy(id, location = binder.id))
+
+        assertEquals(DeleteLocationResult.NotEmpty, collection.deleteLocation(binder.id))
+        assertEquals(listOf(binder), collection.locations())
+        assertEquals(1, collection.ownedCopies(id).size)
+    }
+
+    private fun printing(id: PrintingIdentifier) = Printing(
+        identifier = id,
+        baseNumber = id.sourceId.substringBefore('_'),
+        releaseProduct = "Romance Dawn",
+        rarity = "L",
+        name = "Roronoa Zoro",
+        imageUrl = "https://example.invalid/${id.sourceId}.png",
+    )
+}

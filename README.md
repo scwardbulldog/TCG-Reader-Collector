@@ -4,8 +4,8 @@ A personal Android app that inventories One Piece cards by scanning them. See [t
 
 ## Layout
 
-- `domain/`: portable Kotlin/JVM module with no Android dependencies. Printings, Owned Copies, matching rules and the `CardScanner` interface live here. A `FakeCardScanner` is in its test fixtures.
-- `app/`: Android app (Kotlin, Jetpack Compose). CameraX and ML Kit text recognition (bundled Latin model) are declared but not used yet.
+- `domain/`: portable Kotlin/JVM module with no Android dependencies. The Printing, Variant and Owned Copy model, the `CatalogStore` / `CollectionStore` interfaces, One Piece rules (`tcg.domain.onepiece`) and the `CardScanner` interface live here. A `FakeCardScanner` is in its test fixtures.
+- `app/`: Android app (Kotlin, Jetpack Compose). `tcg.app.storage` has the Room implementation, with the Catalog and Collection in separate tables. CameraX and ML Kit text recognition (bundled Latin model) are declared but not used yet.
 
 ## Requirements
 
@@ -20,7 +20,10 @@ Run from the repo root (use `./gradlew` on macOS/Linux).
 | --- | --- |
 | Domain tests (JVM, no device) | `.\gradlew.bat :domain:test` |
 | One domain test class | `.\gradlew.bat :domain:test --tests "tcg.domain.scanning.CardScannerTest"` |
+| Storage tests (Room, on the attached phone) | `.\gradlew.bat :app:connectedDebugAndroidTest` |
 | Build debug APK | `.\gradlew.bat :app:assembleDebug` |
+
+`connectedDebugAndroidTest` needs the phone attached (`adb devices`). Gradle uninstalls the app from the phone afterwards, so run `:app:installDebug` again to reinstall it.
 
 The APK is written to `app/build/outputs/apk/debug/app-debug.apk`.
 

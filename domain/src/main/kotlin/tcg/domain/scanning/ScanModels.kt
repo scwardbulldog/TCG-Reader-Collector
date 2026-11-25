@@ -1,8 +1,7 @@
 package tcg.domain.scanning
 
-enum class Game { OnePiece }
-
-enum class Language { English, Japanese }
+import tcg.domain.Game
+import tcg.domain.Language
 
 /** What a Scan Session is scoped to: one Game and one collector-chosen Language. */
 data class ScanScope(val game: Game, val language: Language)

@@ -2,6 +2,8 @@ package tcg.domain.scanning
 
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.test.runTest
+import tcg.domain.Game
+import tcg.domain.Language
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
