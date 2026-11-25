@@ -13,20 +13,32 @@ Every **Printing** of a **Game** that the app knows about, in every supported **
 _Avoid_: Card database, card list, set list
 
 **Printing**:
-One specific catalog card within a **Game**, identified by its card number, **Language**, and **Variant**.
+One specific catalog card within a **Game** and **Language**, as listed in the **Catalog**; several Printings can share one **Base Number**.
 _Avoid_: Card (ambiguous), SKU
 
+**Base Number**:
+The number printed on a card, e.g. OP01-001, shared by every **Printing** of that card across **Variants** and **Languages**.
+_Avoid_: Card ID, set number
+
 **Language**:
-The language edition a **Printing** was published in (English, Japanese, Chinese); the same card number in two Languages is two **Printings**.
+The language edition a **Printing** was published in (English, Japanese); the same **Base Number** in two Languages is two **Printings**.
 _Avoid_: Region, locale
 
 **Variant**:
-The treatment that distinguishes **Printings** sharing a card number and **Language**, e.g. normal vs. parallel/alt-art.
-_Avoid_: Version, rarity
+What sets a **Printing** apart from others sharing its **Base Number** and **Language**: Normal, Alternate Art, or **Reprint**.
+_Avoid_: Version, rarity, treatment
+
+**Alternate Art**:
+A **Variant** with different artwork or finish from the Normal **Printing** (parallel, manga, SP, promo-stamped and similar).
+_Avoid_: Parallel (too narrow), alt
+
+**Reprint**:
+A **Variant** re-releasing a **Printing**'s artwork in a later product; tracked as its own **Printing**.
+_Avoid_: Re-release, duplicate
 
 **Owned Copy**:
-A physical card the collector holds, tied to exactly one **Printing**, with quantity, condition, **Location**, and notes.
-_Avoid_: Card (ambiguous), item, entry
+One physical card the collector holds, tied to exactly one **Printing**, with its own condition, **Location**, and notes; how many of a Printing are owned is the count of its Owned Copies.
+_Avoid_: Card (ambiguous), item, entry, holding
 
 **Location**:
 Where an **Owned Copy** is physically kept, e.g. "Binder 3" or "Bulk box A".
