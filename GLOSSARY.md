@@ -6,7 +6,10 @@ A personal inventory of physical trading cards (One Piece first; Dragon Ball and
 
 **Game**:
 A trading card game whose cards are catalogued, e.g. One Piece Card Game.
-_Avoid_: TCG, franchise
+_Avoid_: TCG, franchise, series
+
+**Collection**:
+The collector's personal inventory of **Owned Copies**. A **Game**'s Collection is the subset whose **Printings** belong to that Game.
 
 **Catalog**:
 Every **Printing** of a **Game** that the app knows about, in every supported **Language**; scans and searches are matched against it.
@@ -17,7 +20,7 @@ One specific catalog card within a **Game** and **Language**, as listed in the *
 _Avoid_: Card (ambiguous), SKU
 
 **Base Number**:
-The number printed on a card, e.g. OP01-001, shared by every **Printing** of that card across **Variants** and **Languages**.
+The number printed on a card within a **Game**, e.g. OP01-001 in One Piece. In One Piece, the **Printings** of the same card share a Base Number across **Variants** and **Languages**.
 _Avoid_: Card ID, set number
 
 **Language**:
@@ -36,6 +39,10 @@ _Avoid_: Parallel (too narrow), alt
 A **Variant** re-releasing a **Printing**'s artwork in a later product; tracked as its own **Printing**.
 _Avoid_: Re-release, duplicate
 
+**Release Product**:
+The set, pack, or other product associated with a specific **Printing**'s release, not the product implied by its **Base Number**. A **Reprint** belongs to its own Release Product.
+_Avoid_: Set number
+
 **Owned Copy**:
 One physical card the collector holds, tied to exactly one **Printing**, with its own condition, **Location**, and notes; how many of a Printing are owned is the count of its Owned Copies.
 _Avoid_: Card (ambiguous), item, entry, holding
@@ -45,5 +52,5 @@ Where an **Owned Copy** is physically kept, e.g. "Binder 3" or "Bulk box A".
 _Avoid_: Storage, container, bin
 
 **Scan Session**:
-A run of consecutive scans that all share one collector-chosen **Language**.
+A run of consecutive scans for one **Game** and one collector-chosen **Language**.
 _Avoid_: Batch, import
