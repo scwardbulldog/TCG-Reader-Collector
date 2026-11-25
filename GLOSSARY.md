@@ -8,6 +8,10 @@ A personal inventory of physical trading cards (One Piece first; Dragon Ball and
 A trading card game whose cards are catalogued, e.g. One Piece Card Game.
 _Avoid_: TCG, franchise
 
+**Catalog**:
+Every **Printing** of a **Game** that the app knows about, in every supported **Language**; scans and searches are matched against it.
+_Avoid_: Card database, card list, set list
+
 **Printing**:
 One specific catalog card within a **Game**, identified by its card number, **Language**, and **Variant**.
 _Avoid_: Card (ambiguous), SKU
