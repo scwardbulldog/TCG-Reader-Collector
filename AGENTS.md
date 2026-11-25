@@ -1,3 +1,7 @@
+## Build and test
+
+Build, test and install commands are in [README.md](README.md). The `domain` module must stay free of Android dependencies.
+
 ## Agent skills
 
 ### Issue tracker
