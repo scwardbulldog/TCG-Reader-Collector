@@ -45,8 +45,9 @@ const $ = id => document.getElementById(id);
 const v = $('v'), crop = $('crop'), cx = crop.getContext('2d', {willReadFrequently: true});
 const N_STABLE = 3;
 let track, worker, td = null, running = false, torchOn = false;
-let card = freshCard(), results = [], awaitingSwap = null;
-function freshCard(){ return {firstSeen: null, last: null, streak: 0, locked: null, raw: '', lockMs: null, lat: []}; }
+let card = freshCard(), results = [], awaitingSwap = null, emptySince = null;
+const SWAP_EMPTY_MS = 1500;
+function freshCard(){ return {firstSeen: null, last: null, streak: 0, locked: null, raw: '', lockMs: null, lat: [], hits: {}}; }
 
 const RE = /\b(OP|ST|EB|PRB)(\d{2})-(\d{3})\b|\bP-(\d{3})\b/;
 function normalize(t){
@@ -97,12 +98,20 @@ async function loop(){
     try { text = await ocr(); } catch (e){ $('state').textContent = 'ERROR: ' + e.message; await new Promise(r => setTimeout(r, 1000)); continue; }
     const ms = performance.now() - t0; card.lat.push(ms);
     let num = parse(text);
-    // After a verdict, ignore the just-recorded number until the card leaves frame or a different number shows.
-    if (awaitingSwap){ if (num !== awaitingSwap) awaitingSwap = null; else num = null; }
+    // After a verdict, ignore the just-recorded number until the card has clearly left (several empty
+    // frames) or a different number shows; single dropped frames must not count as a swap.
+    if (awaitingSwap){
+      if (!num){ emptySince ??= t0; if (t0 - emptySince >= SWAP_EMPTY_MS) awaitingSwap = null; }
+      else if (num !== awaitingSwap) awaitingSwap = null;
+      else { emptySince = null; num = null; }
+    }
     if (num){
       card.firstSeen ??= t0;
-      card.streak = num === card.last ? card.streak + 1 : 1; card.last = num; card.raw = text.trim();
-      if (card.streak >= N_STABLE){ card.locked = num; card.lockMs = Math.round(performance.now() - card.firstSeen); navigator.vibrate?.(60); }
+      // Vote rather than require consecutive reads: frames with no read don't reset progress.
+      card.hits[num] = (card.hits[num] || 0) + 1;
+      card.last = Object.keys(card.hits).reduce((a, b) => card.hits[a] >= card.hits[b] ? a : b);
+      card.streak = card.hits[card.last]; card.raw = text.trim();
+      if (card.streak >= N_STABLE){ card.locked = card.last; card.lockMs = Math.round(performance.now() - card.firstSeen); navigator.vibrate?.(60); }
     }
     render(text, ms);
   }
@@ -121,7 +130,7 @@ function record(verdict){
   const ok = results.filter(r => r.verdict === 'correct').length, bad = results.filter(r => r.verdict === 'wrong').length;
   $('tally').textContent = `${results.length} scanned · ✓${ok} ✗${bad} missed ${results.length - ok - bad} · accuracy ${Math.round(100 * ok / results.length)}% · median lock ${median(results.filter(r => r.lockMs !== '').map(r => r.lockMs))} ms`;
   $('log').textContent = toCsv();
-  awaitingSwap = card.locked ?? card.last;
+  awaitingSwap = card.locked ?? card.last; emptySince = null;
   card = freshCard(); render();
 }
 function toCsv(){ const h = ['i','engine','roi','locked','raw','lockMs','avgFrameMs','verdict','torch']; return [h.join(','), ...results.map(r => h.map(k => JSON.stringify(r[k] ?? '')).join(','))].join('\n'); }

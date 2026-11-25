@@ -51,6 +51,7 @@ class MainActivity : AppCompatActivity() {
     companion object {
         const val TAG = "SCANSPIKE"
         const val CSV_HEADER = "index,locked,raw,time_to_lock_ms,avg_frame_latency_ms,verdict,torch,roi,n,res"
+        private const val SWAP_EMPTY_MS = 1500L
 
         private const val D = "[0-9OQDIL|!SBZ]"
         private const val SEP = "\\s*[-\u2010\u2011\u2012\u2013\u2014\u2015\u2212~_=.]?\\s*"
@@ -116,6 +117,8 @@ class MainActivity : AppCompatActivity() {
     private var locked: String? = null
     private var lockedRaw = ""
     private var awaitingSwap: String? = null
+    private var emptySince = 0L
+    private val hits = mutableMapOf<String, Int>()
     private var timeToLock: Long? = null
     private var latencySum = 0L
     private var frameCount = 0
@@ -242,33 +245,39 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun onFrame(frameMatch: Match?, latency: Long, now: Long, res: String) {
-        // After a verdict, ignore the just-recorded number until the card leaves frame or a different number shows.
+        // After a verdict, ignore the just-recorded number until the card has clearly left (several empty
+        // frames) or a different number shows; single dropped frames are common and must not count as a swap.
         var m = frameMatch
         if (awaitingSwap != null) {
-            if (m == null || m.number != awaitingSwap) awaitingSwap = null else m = null
+            when {
+                m == null -> { if (emptySince == 0L) emptySince = now; if (now - emptySince >= SWAP_EMPTY_MS) awaitingSwap = null }
+                m.number != awaitingSwap -> awaitingSwap = null
+                else -> { emptySince = 0L; m = null }
+            }
         }
         lastLatency = latency
         latencySum += latency
         frameCount++
         if (m != null) {
             if (firstSeenAt == null) firstSeenAt = now
-            if (m.number == candidate) streak++ else { candidate = m.number; streak = 1 }
+            // Vote rather than require consecutive reads: frames with no read don't reset progress.
+            val h = (hits[m.number] ?: 0) + 1
+            hits[m.number] = h
+            candidate = hits.maxByOrNull { it.value }?.key
+            streak = hits[candidate] ?: 0
             candidateRaw = m.raw
             if (locked == null && streak >= stableN) {
-                locked = m.number
+                locked = candidate
                 lockedRaw = m.raw
                 timeToLock = now - (firstSeenAt ?: now)
             }
-        } else {
-            streak = 0
-            candidate = null
         }
         lockedText.text = locked ?: (candidate?.let { "$it ?" } ?: if (awaitingSwap != null) "next card…" else "—")
         lockedText.setTextColor(if (locked != null) 0xFF69F0AE.toInt() else 0xFFFFFFFF.toInt())
         rawText.text = "raw: " + (if (locked != null) lockedRaw else m?.raw ?: "")
         statusText.text = buildString {
             append("frame ${latency}ms  avg ${avgLatency()}ms  n=$frameCount  $res")
-            append("  streak $streak/$stableN")
+            append("  votes $streak/$stableN")
             timeToLock?.let { append("  LOCK ${it}ms") }
         }
     }
@@ -296,7 +305,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun resetCard() {
-        firstSeenAt = null; candidate = null; candidateRaw = ""; streak = 0
+        firstSeenAt = null; candidate = null; candidateRaw = ""; streak = 0; hits.clear(); emptySince = 0L
         locked = null; lockedRaw = ""; timeToLock = null
         latencySum = 0; frameCount = 0
         if (::lockedText.isInitialized) {
