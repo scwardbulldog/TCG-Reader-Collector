@@ -19,6 +19,14 @@ _Avoid_: Card database, card list, set list
 One specific catalog card within a **Game** and **Language**, as listed in the **Catalog**; several Printings can share one **Base Number**.
 _Avoid_: Card (ambiguous), SKU
 
+**Printing identifier**:
+The stable reference to a **Printing**: its **Game**, **Language**, and the source's own card-list ID, e.g. onepiece / EN / OP01-001_p1.
+_Avoid_: Card ID, SKU
+
+**Unresolved Printing**:
+A **Printing** that an **Owned Copy** refers to by **Printing identifier** only, because the **Catalog** has no record of it (e.g. after a restore).
+_Avoid_: Orphan, missing card
+
 **Base Number**:
 The number printed on a card within a **Game**, e.g. OP01-001 in One Piece. In One Piece, the **Printings** of the same card share a Base Number across **Variants** and **Languages**.
 _Avoid_: Card ID, set number
