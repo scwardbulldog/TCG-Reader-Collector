@@ -25,6 +25,14 @@ data class CatalogPrintingEntity(
     val imageUrl: String,
 )
 
+/** Which source version each stored Catalog came from, so the next check can skip an unchanged file. */
+@Entity(tableName = "catalog_version", primaryKeys = ["game", "language"])
+data class CatalogVersionEntity(
+    val game: Game,
+    val language: Language,
+    val version: String?,
+)
+
 @Entity(tableName = "location")
 data class LocationEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,

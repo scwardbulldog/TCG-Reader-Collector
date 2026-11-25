@@ -7,9 +7,11 @@ import tcg.domain.Printing
 import tcg.domain.PrintingIdentifier
 
 class RoomCatalogStore(private val dao: CatalogDao) : CatalogStore {
-    override suspend fun replaceCatalog(game: Game, language: Language, printings: List<Printing>) {
-        dao.replaceAll(game, language, printings.map { it.toEntity() })
+    override suspend fun replaceCatalog(game: Game, language: Language, printings: List<Printing>, version: String?) {
+        dao.replaceAll(game, language, printings.map { it.toEntity() }, version)
     }
+
+    override suspend fun catalogVersion(game: Game, language: Language): String? = dao.version(game, language)
 
     override suspend fun find(identifier: PrintingIdentifier): Printing? =
         dao.find(identifier.game, identifier.language, identifier.sourceId)?.toDomain()

@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -16,6 +18,15 @@ android {
         versionCode = 1
         versionName = "0.1.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        // Read-only token for the private Catalog repo: from local.properties (catalog.token) or the
+        // CATALOG_TOKEN environment variable. Neither is committed; it is the app's only credential.
+        val localProperties = Properties().apply {
+            rootProject.file("local.properties").takeIf { it.exists() }?.reader()?.use { load(it) }
+        }
+        val catalogToken = localProperties.getProperty("catalog.token") ?: System.getenv("CATALOG_TOKEN") ?: ""
+        buildConfigField("String", "CATALOG_TOKEN", "\"$catalogToken\"")
+        buildConfigField("String", "CATALOG_REPO", "\"scwardbulldog/TCG-Catalog\"")
     }
 
     buildTypes {
@@ -30,12 +41,19 @@ android {
     }
 
     buildFeatures {
+        buildConfig = true
         compose = true
     }
+
+    sourceSets["androidTest"].assets.srcDir("$projectDir/schemas")
 }
 
 kotlin {
     jvmToolchain(17)
+}
+
+ksp {
+    arg("room.schemaLocation", "$projectDir/schemas")
 }
 
 dependencies {
@@ -60,6 +78,7 @@ dependencies {
     implementation("androidx.room:room-ktx:$room")
     ksp("androidx.room:room-compiler:$room")
 
+    androidTestImplementation("androidx.room:room-testing:$room")
     androidTestImplementation("androidx.test.ext:junit:1.2.1")
     androidTestImplementation("androidx.test:core:1.6.1")
     androidTestImplementation("androidx.test:runner:1.6.2")

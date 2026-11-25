@@ -2,8 +2,14 @@ package tcg.domain
 
 /** The Catalog: every Printing the app knows about. Stored apart from the Collection. */
 interface CatalogStore {
-    /** Replaces all Printings of one Game and Language. Never touches the Collection. */
-    suspend fun replaceCatalog(game: Game, language: Language, printings: List<Printing>)
+    /**
+     * Replaces all Printings of one Game and Language, and the [version] they came from, in one
+     * transaction. Never touches the Collection.
+     */
+    suspend fun replaceCatalog(game: Game, language: Language, printings: List<Printing>, version: String? = null)
+
+    /** The source version of the stored Catalog for one Game and Language; null if none was recorded. */
+    suspend fun catalogVersion(game: Game, language: Language): String?
 
     suspend fun find(identifier: PrintingIdentifier): Printing?
 

@@ -122,6 +122,18 @@ class CatalogAndCollectionStorageTest {
         assertEquals(1, collection.ownedCopies(id).size)
     }
 
+    @Test
+    fun the_catalog_version_is_stored_with_the_printings_per_language() = runTest {
+        val zoro = PrintingIdentifier(Game.OnePiece, Language.English, "OP01-001_p1")
+        assertNull(catalog.catalogVersion(Game.OnePiece, Language.English))
+
+        catalog.replaceCatalog(Game.OnePiece, Language.English, listOf(printing(zoro)), version = "v1")
+        catalog.replaceCatalog(Game.OnePiece, Language.English, listOf(printing(zoro)), version = "v2")
+
+        assertEquals("v2", catalog.catalogVersion(Game.OnePiece, Language.English))
+        assertNull(catalog.catalogVersion(Game.OnePiece, Language.Japanese))
+    }
+
     private fun printing(id: PrintingIdentifier) = Printing(
         identifier = id,
         baseNumber = id.sourceId.substringBefore('_'),

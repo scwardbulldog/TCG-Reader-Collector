@@ -34,3 +34,9 @@ The APK is written to `app/build/outputs/apk/debug/app-debug.apk`.
 3. Install: `.\gradlew.bat :app:installDebug`, or `adb install -r app/build/outputs/apk/debug/app-debug.apk`.
 
 The app needs no account, backend or Play Store services.
+
+## Catalog download
+
+On launch, and from the menu's "Update catalog", the app downloads `onepiece-en.json` and `onepiece-jp.json` from the private `scwardbulldog/TCG-Catalog` repo and stores them in the local database (see [the Catalog file format](docs/catalog-format.md)). A failed or malformed download keeps the previous Catalog. The ETag of each file is its stored version, so an unchanged Catalog is not downloaded again.
+
+Access uses a read-only, fine-grained GitHub token (Contents: read, `TCG-Catalog` only), set at build time in `local.properties` (`catalog.token=...`) or the `CATALOG_TOKEN` environment variable. It is the app's only credential and must never be committed.

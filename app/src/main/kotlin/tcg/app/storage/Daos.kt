@@ -2,6 +2,7 @@ package tcg.app.storage
 
 import androidx.room.Dao
 import androidx.room.Insert
+import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Transaction
 import tcg.domain.Game
@@ -16,10 +17,17 @@ interface CatalogDao {
     suspend fun insertAll(printings: List<CatalogPrintingEntity>)
 
     @Transaction
-    suspend fun replaceAll(game: Game, language: Language, printings: List<CatalogPrintingEntity>) {
+    suspend fun replaceAll(game: Game, language: Language, printings: List<CatalogPrintingEntity>, version: String?) {
         deleteAll(game, language)
         insertAll(printings)
+        upsertVersion(CatalogVersionEntity(game, language, version))
     }
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertVersion(version: CatalogVersionEntity)
+
+    @Query("SELECT version FROM catalog_version WHERE game = :game AND language = :language")
+    suspend fun version(game: Game, language: Language): String?
 
     @Query("SELECT * FROM catalog_printing WHERE game = :game AND language = :language AND sourceId = :sourceId")
     suspend fun find(game: Game, language: Language, sourceId: String): CatalogPrintingEntity?
