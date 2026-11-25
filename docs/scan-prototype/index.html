@@ -45,7 +45,7 @@ const $ = id => document.getElementById(id);
 const v = $('v'), crop = $('crop'), cx = crop.getContext('2d', {willReadFrequently: true});
 const N_STABLE = 3;
 let track, worker, td = null, running = false, torchOn = false;
-let card = freshCard(), results = [];
+let card = freshCard(), results = [], awaitingSwap = null;
 function freshCard(){ return {firstSeen: null, last: null, streak: 0, locked: null, raw: '', lockMs: null, lat: []}; }
 
 const RE = /\b(OP|ST|EB|PRB)(\d{2})-(\d{3})\b|\bP-(\d{3})\b/;
@@ -96,7 +96,9 @@ async function loop(){
     const t0 = performance.now(); let text = '';
     try { text = await ocr(); } catch (e){ $('state').textContent = 'ERROR: ' + e.message; await new Promise(r => setTimeout(r, 1000)); continue; }
     const ms = performance.now() - t0; card.lat.push(ms);
-    const num = parse(text);
+    let num = parse(text);
+    // After a verdict, ignore the just-recorded number until the card leaves frame or a different number shows.
+    if (awaitingSwap){ if (num !== awaitingSwap) awaitingSwap = null; else num = null; }
     if (num){
       card.firstSeen ??= t0;
       card.streak = num === card.last ? card.streak + 1 : 1; card.last = num; card.raw = text.trim();
@@ -106,7 +108,7 @@ async function loop(){
   }
 }
 function render(text = '', ms = 0){
-  $('locked').textContent = card.locked ? `${card.locked}  (${card.lockMs} ms)` : (card.last ? `${card.last} …${card.streak}/${N_STABLE}` : '—');
+  $('locked').textContent = card.locked ? `${card.locked}  (${card.lockMs} ms)` : (card.last ? `${card.last} …${card.streak}/${N_STABLE}` : awaitingSwap ? 'next card…' : '—');
   $('state').textContent = JSON.stringify({engine: $('engine').value, frameMs: Math.round(ms), avgFrameMs: avg(card.lat), frames: card.lat.length,
     streak: card.streak, candidate: card.last, locked: card.locked, lockMs: card.lockMs, torch: torchOn,
     video: `${v.videoWidth}x${v.videoHeight}`, textDetector: !!td, rawOcr: text.trim()}, null, 1);
@@ -119,6 +121,7 @@ function record(verdict){
   const ok = results.filter(r => r.verdict === 'correct').length, bad = results.filter(r => r.verdict === 'wrong').length;
   $('tally').textContent = `${results.length} scanned · ✓${ok} ✗${bad} missed ${results.length - ok - bad} · accuracy ${Math.round(100 * ok / results.length)}% · median lock ${median(results.filter(r => r.lockMs !== '').map(r => r.lockMs))} ms`;
   $('log').textContent = toCsv();
+  awaitingSwap = card.locked ?? card.last;
   card = freshCard(); render();
 }
 function toCsv(){ const h = ['i','engine','roi','locked','raw','lockMs','avgFrameMs','verdict','torch']; return [h.join(','), ...results.map(r => h.map(k => JSON.stringify(r[k] ?? '')).join(','))].join('\n'); }
