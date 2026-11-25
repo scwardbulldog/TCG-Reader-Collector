@@ -1,0 +1,206 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Scan Session logic prototype</title>
+<style>
+  body { max-width: 44rem; margin: auto; padding: 1rem; font: 16px/1.5 system-ui, sans-serif; color: #162a26; }
+  section { border: 1px solid #b8ccc6; border-radius: .6rem; padding: .8rem; margin-block: 1rem; }
+  h2 { font-size: 1.15rem; margin-top: 0; }
+  button, input, select { font: inherit; padding: .35rem .55rem; margin: .15rem; }
+  button[aria-selected=true], .primary { background: #16564b; color: white; }
+  dl { display: grid; grid-template-columns: 8.5rem 1fr; gap: .25rem; }
+  dt { font-weight: 600; }
+  dd { margin: 0; }
+  details { margin-left: 1rem; }
+  .art { display: inline-block; border: 1px solid #58847b; padding: 0 .25rem; margin-right: .3rem; }
+</style>
+<h1>Scan Session: throwaway prototype</h1>
+<p>Try a proposed v1 flow: does one explicit confirmation per scan feel right, and can you handle same-number cards, alternate art, reprints and glare without accidentally recording the wrong Printing? Readings, images and timing are simulated. Nothing is saved.</p>
+<section>
+  <h2>Current state</h2>
+  <p id="status" role="status"></p>
+  <dl id="state"></dl>
+  <div id="candidates"></div>
+</section>
+<section>
+  <h2>Free play</h2>
+  <div>
+    <label>Language <select id="language"><option>EN</option><option>JP</option></select></label>
+    <label>Location <select id="location"><option>Binder 1</option><option>Bulk box A</option></select></label>
+    <label>Default condition <select id="condition"><option>Near Mint</option><option>Lightly Played</option></select></label>
+    <button data-act="setup">Start new session</button>
+  </div>
+  <div>
+    <button data-act="unique">Lock on a single match</button>
+    <button data-act="multiple">Lock on a shared Base Number</button>
+    <button data-act="missing">Lock on an unknown number</button>
+    <button data-act="clear">Clear frame for 1.5 seconds</button>
+    <button data-act="glare">Simulate foil glare</button>
+    <button data-act="torch">Toggle torch</button>
+    <button data-act="cancel">Skip / return to camera</button>
+  </div>
+  <form id="manual">
+    <label>Manual search <input id="query" placeholder="Number or name" required></label>
+    <button>Search current Language</button>
+  </form>
+  <div>
+    <label>Condition for this add <select id="override"><option value="">Session default</option><option>Near Mint</option><option>Lightly Played</option></select></label>
+    <label>Copies <input id="quantity" type="number" min="1" step="1" value="1" style="width: 4em"></label>
+    <button class="primary" data-act="add">Confirm and add</button>
+  </div>
+</section>
+<section>
+  <h2>Guided walkthroughs</h2>
+  <div id="tabs" role="tablist" aria-label="Walkthroughs"></div>
+  <div id="steps" role="tabpanel" aria-labelledby="tab-0"></div>
+</section>
+<script id="logic">
+  const settings = { language: 'EN', location: 'Binder 1', condition: 'Near Mint' };
+  const catalog = [
+    { id: 'DEMO-001', base: 'DEMO-001', name: 'Harbor Guard', kind: 'Normal', product: 'Starter Deck', rarity: 'C', art: 'Shield' },
+    { id: 'DEMO-002', base: 'DEMO-002', name: 'Island Captain', kind: 'Normal', product: 'First Voyage', rarity: 'R', art: 'Ship' },
+    { id: 'DEMO-002_r1', base: 'DEMO-002', name: 'Island Captain', kind: 'Reprint', product: 'Collector Box', rarity: 'R', art: 'Ship' },
+    { id: 'DEMO-002_p1', base: 'DEMO-002', name: 'Island Captain', kind: 'Alternate Art', product: 'First Voyage', rarity: 'R', art: 'Sunset' },
+    { id: 'DEMO-002_p2', base: 'DEMO-002', name: 'Island Captain', kind: 'Alternate Art', product: 'Special Pack', rarity: 'SR', art: 'Moon' },
+  ];
+  const start = (defaults = settings, owned = []) => ({
+    defaults, owned, mode: 'Camera', lock: null, suppressed: null, candidates: [], selected: null,
+    torch: false, glare: false, notice: 'Point the camera at a Base Number.',
+  });
+  function transition(s, a) {
+    const note = notice => ({ ...s, notice });
+    const preview = (candidates, mode, lock, empty) => ({
+      ...s, candidates, mode, lock, selected: candidates.length === 1 ? candidates[0].id : null,
+      glare: false, notice: candidates.length ? 'Check the Printing before adding.' : empty,
+    });
+    const camera = notice => ({
+      ...s, mode: 'Camera', candidates: [], selected: null, suppressed: s.lock ?? s.suppressed,
+      lock: null, glare: false, notice,
+    });
+    switch (a.kind) {
+      case 'setup': return start(a.defaults, s.owned);
+      case 'scan': {
+        if (s.mode !== 'Camera') return note('Finish or skip this confirmation before scanning again.');
+        if (s.suppressed === a.base) return note('Still seeing the last Base Number. Clear the frame between cards, or use bulk entry.');
+        const matches = catalog.filter(p => p.base === a.base);
+        return { ...preview(matches, 'Scan confirmation', a.base, 'No Printing found. Search manually or skip; nothing was added.'), suppressed: null };
+      }
+      case 'search': {
+        const query = a.query.trim().toLowerCase();
+        if (!query) return note('Enter a Base Number or name.');
+        const matches = catalog.filter(p => `${p.id} ${p.name}`.toLowerCase().includes(query));
+        return preview(matches, 'Manual search', s.lock, 'No Catalog match in this Language. Nothing was added.');
+      }
+      case 'choose': return { ...s, selected: a.id, notice: 'Printing selected. Confirm to add.' };
+      case 'add': {
+        const printing = s.candidates.find(p => p.id === s.selected);
+        if (!printing) return note('Choose the exact Printing before adding.');
+        if (!Number.isInteger(a.count) || a.count < 1 || a.count > 100) return note('For this demo, enter a whole number from 1 through 100.');
+        const copies = Array.from({ length: a.count }, () => ({
+          printing: printing.id, language: s.defaults.language, location: s.defaults.location,
+          condition: a.condition || s.defaults.condition,
+        }));
+        return { ...camera(`Added ${copies.length} Owned ${copies.length === 1 ? 'Copy' : 'Copies'} of ${printing.id}.`), owned: [...s.owned, ...copies] };
+      }
+      case 'cancel': return camera('Back to camera. Nothing was added.');
+      case 'clear': return s.mode === 'Camera'
+        ? { ...s, suppressed: null, glare: false, notice: 'Frame cleared. The same Base Number can lock again.' }
+        : note('Return to the camera before clearing the frame.');
+      case 'torch': return { ...s, torch: !s.torch, notice: s.torch ? 'Torch off.' : 'Torch on. If the foil reflects it, turn it off and tilt the card.' };
+      case 'glare': return s.mode === 'Camera'
+        ? { ...s, glare: true, notice: 'Try tilting the card away from the light. Try the torch, or search manually.' }
+        : note('Glare guidance is shown while the camera is waiting for a lock.');
+      default: return s;
+    }
+  }
+</script>
+<script>
+  const get = id => document.getElementById(id);
+  const scan = base => ({ kind: 'scan', base });
+  const add = (count = 1, condition = '') => ({ kind: 'add', count, condition });
+  const choose = id => ({ kind: 'choose', id });
+  const scenarios = [
+    { name: 'Identical copies', text: 'A single match is preselected but not recorded. Try bulk entry, then see how to scan the same Base Number again.', steps: [
+      ['Lock on a single match', scan('DEMO-001')], ['Confirm 3 copies', add(3)],
+      ['Show the same number without clearing', scan('DEMO-001')], ['Clear the frame', { kind: 'clear' }],
+      ['Lock on another copy of the same Printing', scan('DEMO-001')], ['Confirm 1 copy with a condition override', add(1, 'Lightly Played')],
+    ] },
+    { name: 'Which Printing?', text: 'A Base Number has four Printings. Try confirming without selecting, then compare art, product and rarity and choose a Reprint.', steps: [
+      ['Lock on a shared Base Number', scan('DEMO-002')], ['Try to confirm without choosing', add()],
+      ['Select the Collector Box Reprint', choose('DEMO-002_r1')], ['Confirm the Reprint', add()],
+    ] },
+    { name: 'Glare and no match', text: 'A foil will not lock, and an attempted number is not in the Catalog. Recover by searching for the name instead.', steps: [
+      ['Simulate glare', { kind: 'glare' }], ['Try the torch', { kind: 'torch' }],
+      ['Lock on an unknown number', scan('DEMO-999')], ['Search for Island Captain', { kind: 'search', query: 'Island Captain' }],
+      ['Select the Special Pack Alternate Art', choose('DEMO-002_p2')], ['Confirm 1 copy', add()],
+    ] },
+  ];
+  let state = start(), active = 0, progress = 0;
+  function dispatch(action) {
+    state = transition(state, action);
+    if (action.kind === 'setup' || (action.kind === 'add' && state.mode === 'Camera') || action.kind === 'cancel') {
+      get('quantity').value = 1;
+      get('override').value = '';
+    }
+    render();
+  }
+  function render() {
+    get('status').textContent = state.notice;
+    const d = state.defaults;
+    const counts = new Map();
+    for (const copy of state.owned) {
+      const key = `${copy.printing} (${copy.language}), ${copy.location}, ${copy.condition}`;
+      counts.set(key, (counts.get(key) ?? 0) + 1);
+    }
+    const rows = {
+      'Scan Session': `${d.language} / ${d.location} / ${d.condition}`,
+      Stage: state.mode,
+      'Camera lock': state.lock ?? (state.suppressed ? `Waiting to clear ${state.suppressed}` : 'None'),
+      Lighting: `Torch ${state.torch ? 'on' : 'off'}${state.glare ? '; foil glare simulated' : ''}`,
+      'Selected Printing': state.selected ?? 'None',
+      'Pending add': `${get('quantity').value || 'No'} copies / ${get('override').value || d.condition}`,
+      'Owned Copies': counts.size ? [...counts].map(([key, count]) => `${count} × ${key}`).join(' | ') : 'None',
+    };
+    get('state').innerHTML = Object.entries(rows).map(([label, value]) => `<dt>${label}</dt><dd>${value}</dd>`).join('');
+    const drawerOpen = get('candidates').querySelector('details')?.open;
+    const option = p => `<div><button data-printing="${p.id}" aria-pressed="${p.id === state.selected}"><span class="art">${p.art}</span>${p.kind} · ${p.product} · ${p.rarity} · ${p.id}${p.id === state.selected ? ' (selected)' : ''}</button></div>`;
+    const ofKind = kind => state.candidates.filter(p => p.kind === kind).map(option).join('');
+    const reprints = ofKind('Reprint');
+    get('candidates').innerHTML = ofKind('Normal') + (reprints
+      ? `<details ${drawerOpen || state.candidates.length === 1 ? 'open' : ''}><summary>Reprints (separate Printings)</summary>${reprints}</details>` : '') + ofKind('Alternate Art');
+    const scenario = scenarios[active];
+    get('tabs').innerHTML = scenarios.map((s, i) => `<button id="tab-${i}" role="tab" aria-controls="steps" aria-selected="${i === active}" data-tab="${i}">${s.name}</button>`).join('');
+    get('steps').setAttribute('aria-labelledby', `tab-${active}`);
+    get('steps').innerHTML = `<p>${scenario.text}</p><button data-reset>Restart walkthrough</button><ol>${scenario.steps.map(([label], i) =>
+      `<li><button data-step="${i}" ${i !== progress ? 'disabled' : ''}>${label}</button></li>`).join('')}</ol>`;
+  }
+  document.addEventListener('click', event => {
+    const button = event.target.closest('button');
+    if (!button) return;
+    const { act, printing, tab, step, reset } = button.dataset;
+    if (printing) return dispatch(choose(printing));
+    if (tab !== undefined || reset !== undefined) {
+      if (tab !== undefined) active = Number(tab);
+      progress = 0;
+      state = start();
+      return dispatch({ kind: 'setup', defaults: settings });
+    }
+    if (step !== undefined) return dispatch(scenarios[active].steps[progress++][1]);
+    if (act === 'setup') return dispatch({ kind: act, defaults: Object.fromEntries(
+      ['language', 'location', 'condition'].map(key => [key, get(key).value])
+    ) });
+    if (act === 'add') return dispatch(add(get('quantity').valueAsNumber, get('override').value));
+    const base = { unique: 'DEMO-001', multiple: 'DEMO-002', missing: 'DEMO-999' }[act];
+    if (base) return dispatch(scan(base));
+    if (act) dispatch({ kind: act });
+  });
+  get('manual').addEventListener('submit', event => {
+    event.preventDefault();
+    dispatch({ kind: 'search', query: get('query').value });
+  });
+  get('quantity').addEventListener('input', render);
+  get('override').addEventListener('change', render);
+  render();
+</script>
+</html>
