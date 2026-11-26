@@ -82,9 +82,10 @@ Same cards, on the moto g play. Snap each card once in Bulk Add, then read the r
 
 A trial pass on the owner's own cards, not a full run of the tables above; no counts were recorded. It is not a baseline.
 
-- Scanning went well overall.
-- One miss: a Japanese parallel foil whose Base Number ends `078` locked as `076`. Looks like an OCR 6/8 confusion on a glare-prone foil. Watch for digit confusions (6/8, 0/8, 1/7) in the full run, and record them as "wrong number".
-- Catalog gaps found: some of the owner's cards have no matching **Printing**, including Dash Pack and Welcome Pack cards and other promotional releases, Judge and Winner cards, and Illustration Box singles. These are Catalog and pipeline coverage questions, not scanner misses; count them as "no Catalog match" in the full run so they don't distort the hit-rate.
+- Scanning was fast and needed no special positioning (owner's impression; no timings recorded).
+- One miss: a Japanese parallel foil whose Base Number ends `078` locked as `076` (#39). Looks like an OCR 6/8 confusion on a glare-prone foil. Watch for digit confusions (6/8, 0/8, 1/7) in the full run, and record them as "wrong number".
+- Catalog gaps (#38): some of the owner's cards have no matching **Printing**, including Dash Pack and Welcome Pack cards and other promotional releases, Judge and Winner cards, and Illustration Box singles. The Catalog lumps promos under a few generic Release Products rather than named ones. These are Catalog and pipeline coverage questions, not scanner misses; count them as "no Catalog match" in the full run so they don't distort the hit-rate.
+- The pilot left 35 Owned Copies on the Pixel (30 EN, 5 JP). Skipped scans leave no trace, so the phone holds no hit or miss counts.
 
 ## Findings and tuning decisions
 
