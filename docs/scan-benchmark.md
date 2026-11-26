@@ -78,6 +78,14 @@ Same cards, on the moto g play. Snap each card once in Bulk Add, then read the r
 | JP non-foil | | | | | |
 | JP foil | | | | | |
 
+## Pilot run (2026-11-26, Pixel 10 Pro, informal)
+
+A trial pass on the owner's own cards, not a full run of the tables above; no counts were recorded. It is not a baseline.
+
+- Scanning went well overall.
+- One miss: a Japanese parallel foil whose Base Number ends `078` locked as `076`. Looks like an OCR 6/8 confusion on a glare-prone foil. Watch for digit confusions (6/8, 0/8, 1/7) in the full run, and record them as "wrong number".
+- Catalog gaps found: some of the owner's cards have no matching **Printing**, including Dash Pack and Welcome Pack cards and other promotional releases, Judge and Winner cards, and Illustration Box singles. These are Catalog and pipeline coverage questions, not scanner misses; count them as "no Catalog match" in the full run so they don't distort the hit-rate.
+
 ## Findings and tuning decisions
 
 Write the conclusions here, then copy anything lasting into [spec section 5](spec/v1.md#5-scan-session-flow) or an ADR.
