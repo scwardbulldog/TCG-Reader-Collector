@@ -23,7 +23,7 @@ Run from the repo root (use `./gradlew` on macOS/Linux).
 | Storage tests (Room, on the attached phone) | `.\gradlew.bat :app:connectedDebugAndroidTest` |
 | Build debug APK | `.\gradlew.bat :app:assembleDebug` |
 
-`connectedDebugAndroidTest` needs the phone attached (`adb devices`). Gradle uninstalls the app from the phone afterwards, so run `:app:installDebug` again to reinstall it.
+`connectedDebugAndroidTest` needs the phone attached (`adb devices`; if `adb` isn't on your PATH, use `<sdk.dir>\platform-tools\adb.exe`). Gradle uninstalls the app from the phone afterwards, so run `:app:installDebug` again to reinstall it.
 
 The APK is written to `app/build/outputs/apk/debug/app-debug.apk`.
 
