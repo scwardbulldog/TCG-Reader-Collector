@@ -90,6 +90,7 @@ fun PrintingDetailScreen(
                 Column {
                     Text(header.joinToString(" · "), style = MaterialTheme.typography.bodyMedium)
                     if (state.noLongerInCatalog) NoLongerInCatalogFlag()
+                    if (state.unresolved) UnresolvedPrintingFlag()
                 }
             }
             LazyColumn(

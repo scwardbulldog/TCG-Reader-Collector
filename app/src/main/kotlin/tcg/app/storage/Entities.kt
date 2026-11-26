@@ -55,6 +55,15 @@ data class KnownPrintingEntity(
     val imageUrl: String,
 )
 
+/** The single row holding what the app remembers about backups; see [tcg.domain.backup.BackupStatus]. */
+@Entity(tableName = "backup_status")
+data class BackupStatusEntity(
+    @PrimaryKey val id: Int = 0,
+    val lastBackupAtMillis: Long?,
+    val backedUpFingerprint: String?,
+    val restoredSinceBackup: Boolean,
+)
+
 /**
  * Collection table. The Printing is a plain (game, language, sourceId) reference with no foreign key
  * into the Catalog, so a Catalog refresh can never alter or block an Owned Copy.

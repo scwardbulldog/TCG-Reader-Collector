@@ -35,18 +35,20 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.launch
 import tcg.domain.Language
 import tcg.domain.PrintingIdentifier
 import tcg.domain.Variant
 import tcg.domain.collection.CollectionRow
 import tcg.domain.onepiece.OnePiece
 
-/** What the Collection list can start; later slices replace the stubs behind these. */
+/** What the Collection list can start. */
 class CollectionActions(
     val onAdd: () -> Unit,
     val onExportCsv: () -> Unit,
@@ -61,13 +63,18 @@ class CollectionActions(
 @Composable
 fun CollectionScreen(
     viewModel: CollectionViewModel,
+    backup: BackupViewModel,
     actions: CollectionActions,
     updatingCatalog: Boolean,
     catalogRevision: Int,
     snackbarHostState: SnackbarHostState,
     onOpen: (PrintingIdentifier) -> Unit,
 ) {
-    LaunchedEffect(catalogRevision) { viewModel.refresh() }
+    LaunchedEffect(catalogRevision) {
+        viewModel.refresh()
+        backup.refreshReminder()
+    }
+    val scope = rememberCoroutineScope()
     var menuOpen by remember { mutableStateOf(false) }
     val rows = viewModel.rows
 
@@ -100,6 +107,7 @@ fun CollectionScreen(
         snackbarHost = { SnackbarHost(snackbarHostState) },
     ) { padding ->
         Column(Modifier.fillMaxSize().padding(padding)) {
+            backup.reminder?.let { BackupReminderBanner(it, onBackUp = actions.onBackup) }
             OutlinedTextField(
                 value = viewModel.search,
                 onValueChange = viewModel::onSearchChanged,
@@ -124,6 +132,11 @@ fun CollectionScreen(
             }
         }
     }
+
+    BackupDialogs(backup, onRestored = { copies ->
+        viewModel.refresh()
+        scope.launch { snackbarHostState.showSnackbar("Restored $copies Owned Copies") }
+    })
 }
 
 @Composable
@@ -199,6 +212,7 @@ private fun CollectionRowItem(row: CollectionRow, onClick: () -> Unit) {
             val details = listOfNotNull(row.baseNumber, row.printing.language.label(), variant)
             Text(details.joinToString(" · "), style = MaterialTheme.typography.bodyMedium)
             if (row.noLongerInCatalog) NoLongerInCatalogFlag()
+            if (row.unresolved) UnresolvedPrintingFlag()
         }
         Text("×${row.ownedCopyCount}", style = MaterialTheme.typography.titleLarge)
     }

@@ -22,7 +22,10 @@ data class PrintingDetailState(
     val locations: List<Location> = emptyList(),
     /** The Owned Copy awaiting delete confirmation; nothing is deleted until [PrintingDetail.confirmDelete]. */
     val pendingDelete: OwnedCopyId? = null,
-)
+) {
+    /** Loaded, but the Catalog has never had this Printing: only its identifier is known. */
+    val unresolved: Boolean get() = loaded && details == null
+}
 
 /**
  * Maintains the individual Owned Copies of one Printing. With a [location] filter only the copies kept

@@ -1,5 +1,6 @@
 package tcg.app.storage
 
+import tcg.domain.CollectionSnapshot
 import tcg.domain.CollectionStore
 import tcg.domain.DeleteLocationResult
 import tcg.domain.Location
@@ -69,6 +70,26 @@ class RoomCollectionStore(private val dao: CollectionDao) : CollectionStore {
 
     override suspend fun deleteLocation(id: LocationId): DeleteLocationResult =
         if (dao.deleteLocationIfEmpty(id.value)) DeleteLocationResult.Deleted else DeleteLocationResult.NotEmpty
+
+    override suspend fun snapshot(): CollectionSnapshot {
+        val (locations, copies) = dao.snapshot()
+        return CollectionSnapshot(locations.map { Location(LocationId(it.id), it.name) }, copies.map { it.toDomain() })
+    }
+
+    override suspend fun replaceCollection(snapshot: CollectionSnapshot) = dao.replaceAll(
+        snapshot.locations.map { LocationEntity(it.id.value, it.name) },
+        snapshot.copies.map {
+            OwnedCopyEntity(
+                id = it.id.value,
+                game = it.printing.game,
+                language = it.printing.language,
+                sourceId = it.printing.sourceId,
+                condition = it.condition,
+                locationId = it.location?.value,
+                notes = it.notes,
+            )
+        },
+    )
 }
 
 private fun Printing.toKnownEntity() = KnownPrintingEntity(

@@ -6,6 +6,7 @@ import org.junit.After
 import org.junit.Before
 import org.junit.Test
 import tcg.domain.CatalogStore
+import tcg.domain.CollectionSnapshot
 import tcg.domain.CollectionStore
 import tcg.domain.Condition
 import tcg.domain.DeleteLocationResult
@@ -14,8 +15,12 @@ import tcg.domain.LocationId
 import tcg.domain.Game
 import tcg.domain.Language
 import tcg.domain.NewOwnedCopy
+import tcg.domain.OwnedCopy
+import tcg.domain.OwnedCopyId
 import tcg.domain.Printing
 import tcg.domain.PrintingIdentifier
+import tcg.domain.backup.BackupStatus
+import java.time.Instant
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
@@ -204,6 +209,59 @@ class CatalogAndCollectionStorageTest {
 
         assertEquals("v2", catalog.catalogVersion(Game.OnePiece, Language.English))
         assertNull(catalog.catalogVersion(Game.OnePiece, Language.Japanese))
+    }
+
+    @Test
+    fun replacing_the_collection_swaps_everything_and_keeps_ids() = runTest {
+        val zoro = PrintingIdentifier(Game.OnePiece, Language.English, "OP01-001_p1")
+        val old = db.collectionStore()
+        old.createLocation("Old box")
+        old.add(NewOwnedCopy(zoro))
+        old.rememberPrintings(listOf(printing(zoro)))
+        val replacement = CollectionSnapshot(
+            locations = listOf(Location(LocationId(42), "Binder 1")),
+            copies = listOf(
+                OwnedCopy(OwnedCopyId(7), zoro, Condition.Damaged, LocationId(42), "creased"),
+                OwnedCopy(OwnedCopyId(8), zoro, Condition.Damaged, LocationId(42), "creased"),
+            ),
+        )
+
+        collection.replaceCollection(replacement)
+
+        assertEquals(replacement, collection.snapshot())
+        assertNull(collection.lastKnownPrinting(zoro))
+    }
+
+    @Test
+    fun a_replace_that_fails_part_way_leaves_the_old_collection_intact() = runTest {
+        val zoro = PrintingIdentifier(Game.OnePiece, Language.English, "OP01-001_p1")
+        val binder = collection.createLocation("Binder 1")
+        collection.add(NewOwnedCopy(zoro, location = binder.id, notes = "keep me"))
+        collection.rememberPrintings(listOf(printing(zoro)))
+        val before = collection.snapshot()
+        val broken = CollectionSnapshot(
+            locations = emptyList(),
+            copies = listOf(OwnedCopy(OwnedCopyId(1), zoro, Condition.NearMint, LocationId(9999), "")),
+        )
+
+        val failed = runCatching { collection.replaceCollection(broken) }
+
+        assertTrue(failed.isFailure)
+        assertEquals(before, collection.snapshot())
+        assertNotNull(collection.lastKnownPrinting(zoro))
+    }
+
+    @Test
+    fun backup_status_is_stored_and_replaced() = runTest {
+        val store = db.backupStatusStore()
+        assertEquals(BackupStatus(), store.load())
+
+        val saved = BackupStatus(Instant.ofEpochMilli(1_700_000_000_000), "abc123", restoredSinceBackup = true)
+        store.save(saved)
+        assertEquals(saved, store.load())
+
+        store.save(BackupStatus())
+        assertEquals(BackupStatus(), store.load())
     }
 
     private fun printing(id: PrintingIdentifier) = Printing(

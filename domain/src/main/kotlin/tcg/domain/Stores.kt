@@ -54,4 +54,13 @@ interface CollectionStore {
     suspend fun renameLocation(id: LocationId, name: String)
 
     suspend fun deleteLocation(id: LocationId): DeleteLocationResult
+
+    /** Every Location and Owned Copy, read as one consistent snapshot. */
+    suspend fun snapshot(): CollectionSnapshot
+
+    /**
+     * Replaces the whole Collection (Owned Copies, Locations and saved last-known Printings) with [snapshot],
+     * keeping its ids. Atomic: a failure part-way leaves the existing Collection unchanged.
+     */
+    suspend fun replaceCollection(snapshot: CollectionSnapshot)
 }

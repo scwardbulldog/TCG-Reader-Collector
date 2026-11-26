@@ -20,6 +20,9 @@ data class OwnedCopy(
     val notes: String,
 )
 
+/** Everything the Collection holds, with the ids its records have. Backups carry it and restores replace the Collection with it. */
+data class CollectionSnapshot(val locations: List<Location>, val copies: List<OwnedCopy>)
+
 data class NewOwnedCopy(
     val printing: PrintingIdentifier,
     val condition: Condition = Condition.NearMint,

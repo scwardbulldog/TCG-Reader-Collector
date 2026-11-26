@@ -21,6 +21,9 @@ data class CollectionRow(
 ) {
     val baseNumber: String? get() = details?.baseNumber?.takeIf { it.isNotBlank() }
     val name: String? get() = details?.name
+
+    /** The Catalog has never had this Printing (e.g. after a restore): only its identifier is known. */
+    val unresolved: Boolean get() = details == null
 }
 
 /** Narrows the Collection list; every set field must match (AND), and unset fields match everything. */

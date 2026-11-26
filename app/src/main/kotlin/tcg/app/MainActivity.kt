@@ -6,6 +6,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.activity.viewModels
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
@@ -19,6 +20,8 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.lifecycle.viewmodel.initializer
+import androidx.lifecycle.viewmodel.viewModelFactory
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -26,6 +29,7 @@ import kotlinx.coroutines.withContext
 import tcg.app.catalog.GitHubCatalogSource
 import tcg.app.catalog.summary
 import tcg.app.storage.AppDatabase
+import tcg.app.ui.BackupViewModel
 import tcg.app.ui.CollectionActions
 import tcg.app.ui.CollectionScreen
 import tcg.app.ui.CollectionViewModel
@@ -37,11 +41,15 @@ import tcg.domain.Game
 import tcg.domain.Language
 import tcg.domain.PrintingIdentifier
 import tcg.domain.catalog.CatalogUpdater
+import tcg.domain.backup.CollectionBackup
 import tcg.domain.collection.CollectionExport
 import tcg.domain.collection.CollectionList
 import tcg.domain.collection.LastKnownPrintings
 import tcg.domain.collection.PrintingDetail
 import java.io.IOException
+import java.nio.ByteBuffer
+import java.nio.charset.CharacterCodingException
+import java.nio.charset.CodingErrorAction
 import java.time.LocalDate
 
 class MainActivity : ComponentActivity() {
@@ -52,7 +60,19 @@ class MainActivity : ComponentActivity() {
     private val exportTarget = registerForActivityResult(ActivityResultContracts.CreateDocument("text/csv")) { uri ->
         if (uri != null) exportCsv(uri)
     }
+    private val backupTarget = registerForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
+        if (uri != null) saveBackup(uri)
+    }
+    private val restoreSource = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) readBackupFile(uri)
+    }
     private val database get() = (application as TcgApplication).database
+
+    private val backupViewModel by viewModels<BackupViewModel> {
+        viewModelFactory {
+            initializer { BackupViewModel(CollectionBackup(database.collectionStore(), database.backupStatusStore())) }
+        }
+    }
 
     private val catalogUpdater by lazy {
         CatalogUpdater(
@@ -69,12 +89,59 @@ class MainActivity : ComponentActivity() {
             MaterialTheme {
                 CollectionApp(
                     database = database,
+                    backup = backupViewModel,
                     updatingCatalog = updating,
                     catalogRevision = catalogRevision,
                     snackbarHostState = catalogMessages,
                     onUpdateCatalog = ::updateCatalog,
                     onExportCsv = { exportTarget.launch("tcg-collection-${LocalDate.now()}.csv") },
+                    onBackup = { backupTarget.launch("tcg-collection-backup-${LocalDate.now()}.json") },
+                    onRestore = { restoreSource.launch(arrayOf("*/*")) },
                 )
+            }
+        }
+    }
+
+    private fun saveBackup(uri: Uri) {
+        lifecycleScope.launch {
+            val message = try {
+                backupViewModel.saveBackup { content ->
+                    withContext(Dispatchers.IO) {
+                        val stream = contentResolver.openOutputStream(uri, "wt") ?: throw IOException("Cannot open $uri")
+                        stream.bufferedWriter(Charsets.UTF_8).use { it.write(content) }
+                    }
+                }
+                "Backup saved"
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                "Backup failed: ${e.message ?: "could not write the file"}"
+            }
+            catalogMessages.showSnackbar(message)
+        }
+    }
+
+    private fun readBackupFile(uri: Uri) {
+        lifecycleScope.launch {
+            try {
+                val content = withContext(Dispatchers.IO) {
+                    val stream = contentResolver.openInputStream(uri) ?: throw IOException("Cannot open the file")
+                    val bytes = stream.use { it.readNBytes(MAX_BACKUP_BYTES + 1) }
+                    if (bytes.size > MAX_BACKUP_BYTES) throw IOException("The file is too large to be a backup")
+                    // Strict decoding: a damaged file must fail here, not restore with substituted characters.
+                    Charsets.UTF_8.newDecoder()
+                        .onMalformedInput(CodingErrorAction.REPORT)
+                        .onUnmappableCharacter(CodingErrorAction.REPORT)
+                        .decode(ByteBuffer.wrap(bytes))
+                        .toString()
+                }
+                backupViewModel.onFileRead(content)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: CharacterCodingException) {
+                backupViewModel.onFileUnreadable("The file is damaged: it is not valid text.")
+            } catch (e: Exception) {
+                backupViewModel.onFileUnreadable(e.message ?: "The file could not be read.")
             }
         }
     }
@@ -117,25 +184,25 @@ private val printingSaver = listSaver<PrintingIdentifier?, String>(
     restore = { if (it.isEmpty()) null else PrintingIdentifier(Game.valueOf(it[0]), Language.valueOf(it[1]), it[2]) },
 )
 
+private const val MAX_BACKUP_BYTES = 64 * 1024 * 1024
+
 @Composable
 private fun CollectionApp(
     database: AppDatabase,
+    backup: BackupViewModel,
     updatingCatalog: Boolean,
     catalogRevision: Int,
     snackbarHostState: SnackbarHostState,
     onUpdateCatalog: () -> Unit,
     onExportCsv: () -> Unit,
+    onBackup: () -> Unit,
+    onRestore: () -> Unit,
 ) {
     var selected by rememberSaveable(stateSaver = printingSaver) { mutableStateOf<PrintingIdentifier?>(null) }
     var scanning by rememberSaveable { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     val catalog = remember { database.catalogStore() }
     val collection = remember { database.collectionStore() }
-
-    // Each stub is where a later slice (backup, restore) plugs in.
-    fun comingSoon(feature: String) {
-        scope.launch { snackbarHostState.showSnackbar("$feature is not available yet") }
-    }
 
     if (scanning) {
         val scanViewModel = viewModel<ScanViewModel>(initializer = { ScanViewModel(catalog, collection) })
@@ -153,17 +220,19 @@ private fun CollectionApp(
     if (current == null) {
         CollectionScreen(
             viewModel = viewModel,
+            backup = backup,
             actions = CollectionActions(
                 onAdd = { scanning = true },
                 onExportCsv = onExportCsv,
-                onBackup = { comingSoon("Backup") },
-                onRestore = { comingSoon("Restore") },
+                onBackup = onBackup,
+                onRestore = onRestore,
                 onUpdateCatalog = onUpdateCatalog,
                 onSeedSampleData = if (BuildConfig.DEBUG) {
                     {
                         scope.launch {
                             SampleData.seed(catalog, collection)
                             viewModel.refresh()
+                            backup.refreshReminder()
                         }
                     }
                 } else null,

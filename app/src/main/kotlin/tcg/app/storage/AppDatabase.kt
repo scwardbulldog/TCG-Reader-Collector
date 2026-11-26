@@ -8,21 +8,24 @@ import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 import tcg.domain.CatalogStore
 import tcg.domain.CollectionStore
+import tcg.domain.backup.BackupStatusStore
 
 @Database(
     entities = [
         CatalogPrintingEntity::class, CatalogVersionEntity::class, LocationEntity::class, OwnedCopyEntity::class,
-        KnownPrintingEntity::class,
+        KnownPrintingEntity::class, BackupStatusEntity::class,
     ],
-    version = 3,
+    version = 4,
     exportSchema = true,
 )
 abstract class AppDatabase : RoomDatabase() {
     abstract fun catalogDao(): CatalogDao
     abstract fun collectionDao(): CollectionDao
+    abstract fun backupStatusDao(): BackupStatusDao
 
     fun catalogStore(): CatalogStore = RoomCatalogStore(catalogDao())
     fun collectionStore(): CollectionStore = RoomCollectionStore(collectionDao())
+    fun backupStatusStore(): BackupStatusStore = RoomBackupStatusStore(backupStatusDao())
 
     companion object {
         /** Adds the Catalog version table; leaves the Collection and Catalog rows as they are. */
@@ -47,9 +50,19 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        /** Adds the backup status table; leaves the Collection and Catalog rows as they are. */
+        val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `backup_status` (`id` INTEGER NOT NULL, `lastBackupAtMillis` INTEGER, " +
+                        "`backedUpFingerprint` TEXT, `restoredSinceBackup` INTEGER NOT NULL, PRIMARY KEY(`id`))",
+                )
+            }
+        }
+
         fun open(context: Context): AppDatabase =
             Room.databaseBuilder(context, AppDatabase::class.java, "tcg.db")
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
                 .build()
 
         fun inMemory(context: Context): AppDatabase =

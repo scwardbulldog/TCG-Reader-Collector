@@ -1,5 +1,6 @@
 package tcg.domain.collection
 
+import tcg.domain.CollectionSnapshot
 import tcg.domain.CollectionStore
 import tcg.domain.DeleteLocationResult
 import tcg.domain.Location
@@ -56,5 +57,16 @@ class InMemoryCollectionStore : CollectionStore {
         if (copies.any { it.location == id }) return DeleteLocationResult.NotEmpty
         locations.removeAll { it.id == id }
         return DeleteLocationResult.Deleted
+    }
+
+    override suspend fun snapshot(): CollectionSnapshot = CollectionSnapshot(locations.toList(), copies.toList())
+
+    override suspend fun replaceCollection(snapshot: CollectionSnapshot) {
+        copies.clear()
+        copies.addAll(snapshot.copies)
+        locations.clear()
+        locations.addAll(snapshot.locations)
+        lastKnown.clear()
+        nextId = maxOf(nextId, (snapshot.copies.map { it.id.value } + snapshot.locations.map { it.id.value }).maxOrNull()?.plus(1) ?: 1)
     }
 }

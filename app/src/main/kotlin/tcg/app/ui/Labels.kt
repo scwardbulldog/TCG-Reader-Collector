@@ -17,6 +17,16 @@ fun NoLongerInCatalogFlag() {
     )
 }
 
+/** Shown where the Catalog has no record of a Printing, so only its identifier and Language are known. */
+@Composable
+fun UnresolvedPrintingFlag() {
+    Text(
+        "Unresolved Printing",
+        style = MaterialTheme.typography.labelLarge,
+        color = MaterialTheme.colorScheme.error,
+    )
+}
+
 fun Language.label() = when (this) {
     Language.English -> "EN"
     Language.Japanese -> "JP"

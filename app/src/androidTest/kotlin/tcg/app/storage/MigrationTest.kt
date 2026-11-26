@@ -43,6 +43,18 @@ class MigrationTest {
         }
     }
 
+    @Test
+    fun migrating_from_3_to_4_keeps_the_collection_and_adds_the_backup_status_table() {
+        helper.createDatabase(DB_NAME, 3).use { db ->
+            db.execSQL("INSERT INTO owned_copy (game, language, sourceId, condition, locationId, notes) VALUES ('OnePiece', 'English', 'OP01-001', 'NearMint', NULL, 'sleeved')")
+        }
+
+        helper.runMigrationsAndValidate(DB_NAME, 4, true, AppDatabase.MIGRATION_3_4).use { db ->
+            assertEquals(1, db.query("SELECT COUNT(*) FROM owned_copy WHERE notes = 'sleeved'").use { it.moveToFirst(); it.getInt(0) })
+            assertEquals(0, db.query("SELECT COUNT(*) FROM backup_status").use { it.moveToFirst(); it.getInt(0) })
+        }
+    }
+
     private companion object {
         const val DB_NAME = "migration-test"
     }

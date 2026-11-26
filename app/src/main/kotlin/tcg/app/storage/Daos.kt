@@ -91,6 +91,44 @@ interface CollectionDao {
         deleteLocationRow(id)
         return true
     }
+
+    @Query("SELECT * FROM owned_copy ORDER BY id")
+    suspend fun allCopies(): List<OwnedCopyEntity>
+
+    @Insert
+    suspend fun insertLocations(locations: List<LocationEntity>)
+
+    @Query("DELETE FROM owned_copy")
+    suspend fun deleteAllCopies()
+
+    @Query("DELETE FROM location")
+    suspend fun deleteAllLocations()
+
+    @Query("DELETE FROM known_printing")
+    suspend fun deleteAllKnownPrintings()
+
+    /** One transaction, so the Locations and Owned Copies are read as of the same moment. */
+    @Transaction
+    suspend fun snapshot(): Pair<List<LocationEntity>, List<OwnedCopyEntity>> = locations() to allCopies()
+
+    /** One transaction: a failed insert rolls back the deletes too, leaving the old Collection in place. */
+    @Transaction
+    suspend fun replaceAll(locations: List<LocationEntity>, copies: List<OwnedCopyEntity>) {
+        deleteAllCopies()
+        deleteAllLocations()
+        deleteAllKnownPrintings()
+        insertLocations(locations)
+        insertAll(copies)
+    }
+}
+
+@Dao
+interface BackupStatusDao {
+    @Query("SELECT * FROM backup_status WHERE id = 0")
+    suspend fun load(): BackupStatusEntity?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun save(status: BackupStatusEntity)
 }
 
 data class PrintingCount(val game: Game, val language: Language, val sourceId: String, val ownedCopyCount: Int)
