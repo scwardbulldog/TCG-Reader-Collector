@@ -89,7 +89,11 @@ A trial pass on the owner's own cards, not a full run of the tables above; no co
 
 ## Findings and tuning decisions
 
-Write the conclusions here, then copy anything lasting into [spec section 5](spec/v1.md#5-scan-session-flow) or an ADR.
+Owner's verdict after the pilot (no full run done): scanning performance was very acceptable, almost fast, with no special positioning needed, so the benchmark is accepted as good enough for v1 and no tuning is planned now. The 3-vote count stays. No numeric baseline was recorded; run the procedure above if a change to the scanner needs a before and after.
+
+Follow-ups raised: #38 (Catalog gaps; several scanned cards are likely recorded against the normal Printing because the variant is missing), #39 (076 vs 078 misread), #40 (skip session setup, suggest EN vs JP; the latter conflicts with spec section 5).
+
+Checklist for a future full run:
 
 - Hit-rate and time-to-lock versus expectations:
 - Foil glare: does torch or tilt rescue it?
