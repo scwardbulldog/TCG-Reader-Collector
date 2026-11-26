@@ -48,6 +48,10 @@ interface CollectionDao {
     @Insert
     suspend fun insert(copy: OwnedCopyEntity): Long
 
+    /** One transaction: a failed row rolls back the whole insert. */
+    @Insert
+    suspend fun insertAll(copies: List<OwnedCopyEntity>): List<Long>
+
     @Query("SELECT * FROM owned_copy WHERE game = :game AND language = :language AND sourceId = :sourceId ORDER BY id")
     suspend fun ownedCopies(game: Game, language: Language, sourceId: String): List<OwnedCopyEntity>
 

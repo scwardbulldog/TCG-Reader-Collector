@@ -29,6 +29,8 @@ enum class DeleteLocationResult { Deleted, NotEmpty }
 interface CollectionStore {
     suspend fun add(copy: NewOwnedCopy): OwnedCopy
 
+    /** Adds every copy or none: a failure part-way leaves the Collection unchanged. */
+    suspend fun addAll(copies: List<NewOwnedCopy>): List<OwnedCopy>
     suspend fun ownedCopies(printing: PrintingIdentifier): List<OwnedCopy>
 
     /** Saves a changed condition, Location or notes; the Printing of an Owned Copy never changes. */

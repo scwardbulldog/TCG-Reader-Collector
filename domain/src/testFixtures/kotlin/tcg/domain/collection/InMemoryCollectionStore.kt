@@ -17,6 +17,8 @@ class InMemoryCollectionStore : CollectionStore {
     override suspend fun add(copy: NewOwnedCopy): OwnedCopy =
         OwnedCopy(OwnedCopyId(nextId++), copy.printing, copy.condition, copy.location, copy.notes).also(copies::add)
 
+    override suspend fun addAll(copies: List<NewOwnedCopy>): List<OwnedCopy> = copies.map { add(it) }
+
     override suspend fun ownedCopies(printing: PrintingIdentifier): List<OwnedCopy> =
         copies.filter { it.printing == printing }
 

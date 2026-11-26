@@ -49,8 +49,6 @@ class ScanSessionInput(
         require(printing.identifier.game == session.game && printing.identifier.language == session.language) {
             "${printing.identifier} is outside this Scan Session"
         }
-        return List(count) {
-            collection.add(NewOwnedCopy(printing.identifier, condition, session.location.id))
-        }
+        return collection.addAll(List(count) { NewOwnedCopy(printing.identifier, condition, session.location.id) })
     }
 }

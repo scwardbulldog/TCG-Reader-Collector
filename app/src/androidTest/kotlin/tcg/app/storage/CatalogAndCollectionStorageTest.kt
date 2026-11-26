@@ -10,6 +10,7 @@ import tcg.domain.CollectionStore
 import tcg.domain.Condition
 import tcg.domain.DeleteLocationResult
 import tcg.domain.Location
+import tcg.domain.LocationId
 import tcg.domain.Game
 import tcg.domain.Language
 import tcg.domain.NewOwnedCopy
@@ -18,6 +19,7 @@ import tcg.domain.PrintingIdentifier
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 class CatalogAndCollectionStorageTest {
     private lateinit var db: AppDatabase
@@ -88,6 +90,21 @@ class CatalogAndCollectionStorageTest {
         assertEquals("EN Zoro", catalog.find(en)?.name)
         assertEquals("JP Zoro", catalog.find(jp)?.name)
         assertEquals(listOf(en), catalog.findByBaseNumber(Game.OnePiece, Language.English, "OP01-001").map { it.identifier })
+    }
+
+    @Test
+    fun a_failed_bulk_add_leaves_no_owned_copies_behind() = runTest {
+        val zoro = PrintingIdentifier(Game.OnePiece, Language.English, "OP01-001")
+        val binder = collection.createLocation("Binder 1")
+
+        val failed = runCatching {
+            collection.addAll(
+                listOf(NewOwnedCopy(zoro, location = binder.id), NewOwnedCopy(zoro, location = LocationId(9999))),
+            )
+        }
+
+        assertTrue(failed.isFailure)
+        assertEquals(emptyMap(), collection.countsByPrinting())
     }
 
     @Test

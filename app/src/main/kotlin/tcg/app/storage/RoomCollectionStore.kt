@@ -11,18 +11,25 @@ import tcg.domain.PrintingIdentifier
 
 class RoomCollectionStore(private val dao: CollectionDao) : CollectionStore {
     override suspend fun add(copy: NewOwnedCopy): OwnedCopy {
-        val id = dao.insert(
-            OwnedCopyEntity(
-                game = copy.printing.game,
-                language = copy.printing.language,
-                sourceId = copy.printing.sourceId,
-                condition = copy.condition,
-                locationId = copy.location?.value,
-                notes = copy.notes,
-            ),
-        )
+        val id = dao.insert(copy.toEntity())
         return OwnedCopy(OwnedCopyId(id), copy.printing, copy.condition, copy.location, copy.notes)
     }
+
+    override suspend fun addAll(copies: List<NewOwnedCopy>): List<OwnedCopy> {
+        val ids = dao.insertAll(copies.map { it.toEntity() })
+        return copies.zip(ids) { copy, id ->
+            OwnedCopy(OwnedCopyId(id), copy.printing, copy.condition, copy.location, copy.notes)
+        }
+    }
+
+    private fun NewOwnedCopy.toEntity() = OwnedCopyEntity(
+        game = printing.game,
+        language = printing.language,
+        sourceId = printing.sourceId,
+        condition = condition,
+        locationId = location?.value,
+        notes = notes,
+    )
 
     override suspend fun ownedCopies(printing: PrintingIdentifier): List<OwnedCopy> =
         dao.ownedCopies(printing.game, printing.language, printing.sourceId).map { it.toDomain() }
