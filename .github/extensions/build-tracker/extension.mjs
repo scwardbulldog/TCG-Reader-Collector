@@ -4,9 +4,9 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { CanvasError, createCanvas, joinSession } from '@github/copilot-sdk/extension';
 import declaration from './extension.json' with { type: 'json' };
-import { TrackerError, detectRepo, fetchIssues, loadLabelRoles } from './github.mjs';
+import { TrackerError, detectRepo, fetchIssues, loadCommitRefs, loadLabelRoles } from './github.mjs';
 import { buildModel, deriveLane } from './logic.mjs';
-import { findSessions, readPrefs, saveLastParent } from './storage.mjs';
+import { findSessions } from './storage.mjs';
 
 const EXTENSION_DIR = path.dirname(fileURLToPath(import.meta.url));
 // Workspace scope: <repo>/.github/extensions/build-tracker
@@ -54,27 +54,22 @@ async function getState(entry, { force = false, parent } = {}) {
     repo = await resolveRepo(entry.repoOverride);
   } catch (error) {
     if (error instanceof CanvasError) throw error;
-    return { repo: null, generatedAt: null, model: null, stale: false, error: errorBody(error), warning: null };
+    return { repo: null, generatedAt: null, model: null, stale: false, error: errorBody(error) };
   }
   const { data, error } = await loadData(repo, force);
-  const prefs = await readPrefs();
-  let warning = prefs.warning;
-  if (!data) return { repo, generatedAt: null, model: null, stale: false, error: errorBody(error), warning };
+  if (!data) return { repo, generatedAt: null, model: null, stale: false, error: errorBody(error) };
 
   const numbers = data.issues.filter((i) => i.state === 'OPEN').map((i) => i.number);
-  const sessionsByIssue = await findSessions(repo, numbers);
+  const [sessionsByIssue, commitsByIssue] = await Promise.all([findSessions(repo, numbers), loadCommitRefs(REPO_ROOT)]);
   const model = buildModel({
     issues: data.issues,
     roles: data.roles,
     requested: entry.requestedParent,
-    lastParent: prefs.repos[repo]?.lastParent,
     sessionsByIssue,
+    commitsByIssue,
     truncated: data.truncated,
   });
-  if (parent !== undefined && model.selectedKey != null) {
-    warning = (await saveLastParent(repo, model.selectedKey)) ?? warning;
-  }
-  return { repo, generatedAt: data.generatedAt, model, stale: Boolean(error), error: error ? errorBody(error) : null, warning };
+  return { repo, generatedAt: data.generatedAt, model, stale: Boolean(error), error: error ? errorBody(error) : null };
 }
 
 const clean = (value) => String(value ?? '').replace(/\s+/g, ' ').trim().slice(0, 160).replace(/["\\]/g, '\\$&');
@@ -86,7 +81,7 @@ async function startSession(entry, { number, mode = 'local' }) {
   const repo = await resolveRepo(entry.repoOverride);
   const found = cache?.repo === repo ? cache.issues.find((i) => i.number === number) : null;
   if (!found) throw new CanvasError('not_found', `Issue #${number} is not in the loaded data; Refresh first.`);
-  if (deriveLane(found, cache.roles) !== 'readyForAgent') {
+  if (deriveLane(found, cache.roles, (await loadCommitRefs(REPO_ROOT))[number]) !== 'readyForAgent') {
     throw new CanvasError('not_startable', `#${number} is not an unblocked ready-for-agent ticket.`);
   }
   const title = clean(found.title);
@@ -126,7 +121,8 @@ function sendJson(res, value, status = 200) {
 
 const parentParam = (value) => {
   if (value === null || value === undefined || value === '') return undefined;
-  return value === 'inbox' ? 'inbox' : Number.isInteger(Number(value)) ? Number(value) : undefined;
+  if (value === 'inbox' || value === 'upcoming') return value;
+  return Number.isInteger(Number(value)) ? Number(value) : undefined;
 };
 
 async function handle(entry, port, req, res) {
@@ -171,8 +167,16 @@ const entryFor = (instanceId) => instances.get(instanceId) ?? { repoOverride: un
 // Agent-facing results omit ticket bodies (the page loads them) to keep payloads small.
 const slim = (state) => {
   if (!state.model) return state;
-  const cards = state.model.selection.cards.map(({ body, ...card }) => card);
-  return { ...state, model: { ...state.model, selection: { ...state.model.selection, cards } } };
+  const strip = ({ body, ...card }) => card;
+  const { nextUp } = state.model;
+  return {
+    ...state,
+    model: {
+      ...state.model,
+      nextUp: nextUp ? { ...nextUp, card: strip(nextUp.card) } : null,
+      selection: { ...state.model.selection, cards: state.model.selection.cards.map(strip) },
+    },
+  };
 };
 
 const actionHandlers = {
@@ -180,7 +184,7 @@ const actionHandlers = {
   get_state: async ({ instanceId }) => slim(await getState(entryFor(instanceId))),
   select_parent: async ({ instanceId, input }) => {
     const parent = parentParam(input?.parent);
-    if (parent === undefined) throw new CanvasError('invalid_input', 'parent must be an issue number or "inbox".');
+    if (parent === undefined) throw new CanvasError('invalid_input', 'parent must be an issue number, "inbox" or "upcoming".');
     return slim(await getState(entryFor(instanceId), { parent }));
   },
   start_session: ({ instanceId, input }) => startSession(entryFor(instanceId), input ?? {}),

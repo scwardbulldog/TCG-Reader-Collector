@@ -1,49 +1,11 @@
-import { mkdir, readFile, rename, readdir, writeFile } from 'node:fs/promises';
+import { readFile, readdir } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { randomUUID } from 'node:crypto';
 import { sessionMatchesIssue } from './logic.mjs';
 
-const CANVAS_ID = 'build-tracker';
-const FORMAT = 'build-tracker-prefs';
-const VERSION = 1;
 const SESSION_WINDOW_MS = 30 * 24 * 60 * 60 * 1000;
 
 export const copilotHome = () => process.env.COPILOT_HOME || path.join(os.homedir(), '.copilot');
-const prefsFile = () => path.join(copilotHome(), 'extension-data', CANVAS_ID, 'prefs.json');
-
-/** Reads view preferences. Corrupt or unrecognised files are reported, never overwritten. */
-export async function readPrefs() {
-  let raw;
-  try {
-    raw = await readFile(prefsFile(), 'utf8');
-  } catch (error) {
-    if (error.code === 'ENOENT') return { repos: {}, warning: null };
-    return { repos: {}, warning: `Preferences could not be read: ${error.message}`, readOnly: true };
-  }
-  try {
-    const data = JSON.parse(raw);
-    if (data?.format !== FORMAT || data?.version !== VERSION || typeof data.repos !== 'object' || data.repos === null) {
-      throw new Error('unrecognised format or version');
-    }
-    return { repos: data.repos, warning: null };
-  } catch (error) {
-    return { repos: {}, warning: `Preferences file is unrecognised and was left untouched (${error.message}).`, readOnly: true };
-  }
-}
-
-export async function saveLastParent(repo, lastParent) {
-  const prefs = await readPrefs();
-  if (prefs.readOnly) return prefs.warning;
-  if (prefs.repos[repo]?.lastParent === lastParent) return null;
-  prefs.repos[repo] = { ...prefs.repos[repo], lastParent };
-  const file = prefsFile();
-  await mkdir(path.dirname(file), { recursive: true });
-  const temp = `${file}.${randomUUID()}.tmp`;
-  await writeFile(temp, JSON.stringify({ format: FORMAT, version: VERSION, repos: prefs.repos }, null, 2));
-  await rename(temp, file);
-  return null;
-}
 
 function readYamlScalar(text, key) {
   const match = new RegExp(`^${key}:\\s*(.*)$`, 'm').exec(text);

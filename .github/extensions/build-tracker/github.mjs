@@ -1,7 +1,7 @@
 import { execFile } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
-import { classifyGhError, ERROR_KINDS, parseLabelRoles, parseRepoSlug } from './logic.mjs';
+import { classifyGhError, ERROR_KINDS, parseCommitRefs, parseLabelRoles, parseRepoSlug } from './logic.mjs';
 
 const PAGE_SIZE = 100;
 const MAX_PAGES = 5;
@@ -15,9 +15,10 @@ const QUERY = `query($owner:String!,$name:String!,$cursor:String){
         number title state url updatedAt bodyText
         labels(first:20){nodes{name}}
         assignees(first:5){nodes{login}}
+        milestone{title}
         parent{number}
         subIssuesSummary{total completed}
-        blockedBy(first:20){nodes{number state}}
+        blockedBy(first:20){nodes{number title state}}
         closedByPullRequestsReferences(first:5,includeClosedPrs:false){nodes{number state url isDraft}}
       }
     }
@@ -62,6 +63,17 @@ export async function loadLabelRoles(root) {
   }
 }
 
+/** Local `(#N)` commits, read fresh from git on every call (cheap, and agents commit between refreshes). */
+export async function loadCommitRefs(root) {
+  try {
+    const log = await run('git', ['-C', root, 'log', '-n', '500', '--format=%h%x09%s']);
+    const unpushed = await run('git', ['-C', root, 'log', '@{u}..HEAD', '--format=%h']).catch(() => '');
+    return parseCommitRefs(log, unpushed.split(/\r?\n/).filter(Boolean));
+  } catch {
+    return {};
+  }
+}
+
 function normalize(node) {
   return {
     number: node.number,
@@ -72,10 +84,11 @@ function normalize(node) {
     body: String(node.bodyText ?? '').slice(0, BODY_LIMIT),
     labels: node.labels.nodes.map((l) => l.name),
     assignees: node.assignees.nodes.map((a) => a.login),
+    milestone: node.milestone?.title ?? null,
     parent: node.parent?.number ?? null,
     subTotal: node.subIssuesSummary?.total ?? 0,
     subDone: node.subIssuesSummary?.completed ?? 0,
-    blockedBy: node.blockedBy.nodes.map((b) => ({ number: b.number, state: b.state })),
+    blockedBy: node.blockedBy.nodes.map((b) => ({ number: b.number, title: b.title, state: b.state })),
     prs: node.closedByPullRequestsReferences.nodes.map((p) => ({ number: p.number, state: p.state, url: p.url, isDraft: p.isDraft })),
   };
 }

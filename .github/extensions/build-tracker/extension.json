@@ -11,7 +11,7 @@
         "additionalProperties": false,
         "properties": {
           "repo": { "type": "string", "description": "Optional owner/name override; defaults to the git origin remote." },
-          "parent": { "type": ["integer", "string"], "description": "Optional parent issue number, or \"inbox\", to show first." }
+          "parent": { "type": ["integer", "string"], "description": "Optional parent issue number, \"inbox\" or \"upcoming\" (default), to show first." }
         }
       },
       "actions": [
@@ -27,12 +27,12 @@
         },
         {
           "name": "select_parent",
-          "description": "Show the board for a parent issue number or the Inbox.",
+          "description": "Show the board for the Upcoming view, the Inbox, or a parent issue number.",
           "inputSchema": {
             "type": "object",
             "additionalProperties": false,
             "required": ["parent"],
-            "properties": { "parent": { "type": ["integer", "string"], "description": "Parent issue number or \"inbox\"." } }
+            "properties": { "parent": { "type": ["integer", "string"], "description": "Parent issue number, \"inbox\" or \"upcoming\"." } }
           }
         },
         {

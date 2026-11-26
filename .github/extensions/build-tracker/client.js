@@ -51,7 +51,7 @@
       state = await api('/api/state' + (query || ''));
       say(state.error ? 'Refresh failed: ' + state.error.message : 'Updated');
     } catch (error) {
-      state = { repo: null, generatedAt: null, model: null, stale: false, error: { kind: 'unknown', message: error.message, fix: 'Try Refresh.', detail: '' }, warning: null };
+      state = { repo: null, generatedAt: null, model: null, stale: false, error: { kind: 'unknown', message: error.message, fix: 'Try Refresh.', detail: '' } };
     }
     loading = false;
     render();
@@ -73,6 +73,8 @@
       state && state.repo ? h('span', { class: 'muted' }, state.repo) : null,
       h('span', { class: 'spacer' }),
       h('span', { class: 'muted' }, loading ? 'Refreshing…' : 'updated ' + ago(state && state.generatedAt)),
+      model ? h('button', { type: 'button', id: 'upcoming-btn', 'aria-pressed': String(model.selectedKey === 'upcoming'), onclick: () => select('upcoming') },
+        'Upcoming ', h('span', { class: 'badge', 'aria-label': model.upcomingCount + ' open tickets' }, model.upcomingCount)) : null,
       model ? h('button', { type: 'button', id: 'inbox-btn', 'aria-pressed': String(model.selectedKey === 'inbox'), onclick: () => select('inbox') },
         'Inbox ', h('span', { class: 'badge', 'aria-label': model.inboxCount + ' issues' }, model.inboxCount)) : null,
       h('button', { type: 'button', id: 'refresh-btn', disabled: loading, onclick: () => { lastFocusId = 'refresh-btn'; load('?force=1'); } }, 'Refresh'));
@@ -85,23 +87,28 @@
         h('strong', null, state.model ? 'Showing stale data. ' : ''), state.error.message, ' ', state.error.fix,
         state.error.detail ? h('pre', null, state.error.detail) : null));
     }
-    if (state && state.warning) out.push(h('div', { class: 'banner warn', role: 'status' }, state.warning));
     if (state && state.model && state.model.truncated) out.push(h('div', { class: 'banner warn', role: 'status' }, 'Only the 500 most recently updated issues were loaded; older ones are not shown.'));
     return out;
   }
 
   function parentButton(summary, selectedKey) {
+    const note = summary.state === 'CLOSED' ? ' · parent closed' : '';
     return h('button', { type: 'button', class: 'parent-btn', 'aria-pressed': String(summary.number === selectedKey), onclick: () => select(summary.number) },
       h('span', { class: 'name' }, h('strong', null, '#' + summary.number), h('span', null, summary.title)),
-      h('span', { class: 'muted' }, summary.type + ' · ' + summary.done + ' / ' + summary.total + ' done'),
+      h('span', { class: 'muted' }, summary.type + ' · ' + summary.done + ' / ' + summary.total + ' done' + note),
       h('span', { class: 'bar', role: 'progressbar', 'aria-valuemin': 0, 'aria-valuemax': 100, 'aria-valuenow': summary.percent, 'aria-label': summary.title + ' progress' },
         h('span', { style: 'width:' + summary.percent + '%' })));
   }
 
   function renderOverview(model) {
     const nodes = [];
-    if (model.overview.length) nodes.push(h('nav', { class: 'overview', 'aria-label': 'Open parents' }, model.overview.map((s) => parentButton(s, model.selectedKey))));
-    else if (model.completed.length) nodes.push(h('div', { class: 'banner' }, 'All clear: every parent is complete.'));
+    if (model.overview.length) nodes.push(h('nav', { class: 'overview', 'aria-label': 'Parents with open work' }, model.overview.map((s) => parentButton(s, model.selectedKey))));
+    if (model.tidy.length) {
+      nodes.push(h('section', { class: 'tidy', 'aria-label': 'Ready to close' },
+        h('span', { class: 'label' }, 'Ready to close: every child is done but the parent is still open'),
+        h('nav', { class: 'overview' }, model.tidy.map((s) => parentButton(s, model.selectedKey)))));
+    }
+    if (!model.overview.length && !model.tidy.length && model.completed.length) nodes.push(h('div', { class: 'banner' }, 'All clear: every parent is complete.'));
     if (model.completed.length) {
       nodes.push(h('details', { class: 'completed', 'data-key': 'completed', open: openKeys.has('completed') ? true : null, ontoggle: toggleKey },
         h('summary', null, 'Completed (' + model.completed.length + ')'),
@@ -113,8 +120,11 @@
   function chipRow(card) {
     const chips = [];
     if (card.lane !== 'done' && card.lane !== 'blocked') chips.push(h('span', { class: 'chip' + (card.lane === 'needsYou' ? ' human' : '') }, laneTitle(card.lane)));
+    if (card.parent && state.model.selection.kind !== 'parent') chips.push(h('span', { class: 'chip', title: card.parent.title }, 'in #' + card.parent.number));
+    if (card.milestone) chips.push(h('span', { class: 'chip' }, card.milestone));
     for (const chip of card.chips) chips.push(h('span', { class: 'chip' }, chip.replace('wayfinder:', '')));
-    for (const n of card.blockers) chips.push(h('span', { class: 'chip blocked' }, 'blocked by #' + n));
+    for (const b of card.blockers) chips.push(h('span', { class: 'chip blocked', title: b.title }, 'waits on #' + b.number + (b.title ? ' ' + b.title : '')));
+    if (card.commit) chips.push(h('span', { class: 'chip commit', title: card.commit.sha }, card.commit.pushed ? 'committed, still open' : 'committed locally'));
     for (const pr of card.prs) chips.push(h('span', { class: 'chip pr' }, link(pr.url, 'PR #' + pr.number + (pr.isDraft ? ' (draft)' : ''))));
     for (const s of card.sessions) chips.push(h('span', { class: 'chip session', title: s.name }, 'session'));
     for (const a of card.assignees) chips.push(h('span', { class: 'chip' }, '@' + a));
@@ -145,26 +155,28 @@
       cardActions(card));
   }
 
-  function renderNextUp(selection) {
-    if (selection.kind !== 'parent') return null;
-    const next = selection.nextUp;
+  function renderNextUp(model) {
+    const next = model.nextUp;
     if (!next) return h('div', { class: 'banner' }, 'Next up: nothing is ready. Check Blocked and Not ready.');
-    const card = selection.cards.find((c) => c.number === next.number);
+    const card = next.card;
     return h('section', { class: 'nextup ' + (next.kind === 'human' ? 'human' : ''), 'aria-label': 'Next up' },
       h('span', { class: 'label' }, next.kind === 'human' ? 'Needs you' : 'Next up'),
-      h('span', { class: 'title' }, link(card.url, '#' + card.number), ' ', card.title),
+      h('span', { class: 'title' }, link(card.url, '#' + card.number), ' ', card.title,
+        card.parent ? h('span', { class: 'muted' }, ' · in #' + card.parent.number) : null),
       next.kind === 'agent' ? cardActions(card) : null);
   }
 
   function renderBoard(model) {
     const selection = model.selection;
-    if (!selection.kind) return h('div', { class: 'empty' }, 'Nothing to show yet. No parent issues with sub-issues were found and the Inbox is empty.');
-    const heading = selection.kind === 'inbox'
-      ? h('h2', null, 'Inbox')
-      : h('h2', null, link(selection.parent.url, '#' + selection.parent.number), ' ', selection.parent.title, ' ',
-        h('span', { class: 'muted' }, selection.parent.done + ' / ' + selection.parent.total + ' done'));
-    const nextNumber = selection.nextUp ? selection.nextUp.number : null;
+    const heading = selection.kind === 'upcoming'
+      ? h('h2', null, 'Upcoming ', h('span', { class: 'muted' }, 'all open tickets across parents'))
+      : selection.kind === 'inbox'
+        ? h('h2', null, 'Inbox')
+        : h('h2', null, link(selection.parent.url, '#' + selection.parent.number), ' ', selection.parent.title, ' ',
+          h('span', { class: 'muted' }, selection.parent.done + ' / ' + selection.parent.total + ' done' + (selection.parent.state === 'CLOSED' ? ' · parent closed' : '')));
+    const nextNumber = model.nextUp ? model.nextUp.card.number : null;
     const lanes = model.laneDefs.map((lane) => {
+      if (lane.key === 'done' && selection.kind === 'upcoming') return null;
       const cards = selection.cards.filter((c) => c.lane === lane.key);
       if (!cards.length && lane.key !== 'done') return null;
       const key = 'lane-' + lane.key;
@@ -189,7 +201,7 @@
     const nodes = [renderHeader(), ...renderBanners()];
     if (state && state.model) {
       nodes.push(...renderOverview(state.model));
-      nodes.push(renderNextUp(state.model.selection));
+      nodes.push(renderNextUp(state.model));
       nodes.push(renderBoard(state.model));
     } else if (!state || loading) {
       nodes.push(h('div', { class: 'empty', role: 'status' }, 'Loading from GitHub…'));

@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  DEFAULT_ROLES, buildModel, classifyGhError, deriveLane, organize, parseLabelRoles, parseRepoSlug, pickNextUp, pickSelection, sessionMatchesIssue,
+  DEFAULT_ROLES, buildModel, classifyGhError, deriveLane, organize, parseCommitRefs, parseLabelRoles, parseRepoSlug, pickNextUp, pickSelection, sessionMatchesIssue,
 } from './logic.mjs';
 
 const roles = DEFAULT_ROLES;
@@ -34,6 +34,24 @@ test('deriveLane: closed, open PR, human, and unlabelled', () => {
   assert.equal(deriveLane(issue(1, { labels: ['wayfinder:grilling'] }), roles), 'notReady');
 });
 
+test('deriveLane: a commit on an open ticket means awaiting, but blockers and open PRs still win', () => {
+  const commit = { sha: 'abc', pushed: false };
+  assert.equal(deriveLane(issue(1, { labels: ['ready-for-agent'] }), roles, commit), 'awaiting');
+  assert.equal(deriveLane(issue(1, { labels: ['ready-for-human'] }), roles, commit), 'awaiting');
+  assert.equal(deriveLane(issue(1, { prs: [{ number: 5, state: 'OPEN' }] }), roles, commit), 'inProgress');
+  assert.equal(deriveLane(issue(1, { blockedBy: [{ number: 9, state: 'OPEN' }] }), roles, commit), 'blocked');
+  assert.equal(deriveLane(issue(1, { state: 'CLOSED' }), roles, commit), 'done');
+});
+
+test('parseCommitRefs maps (#N) subjects to the newest commit and tracks unpushed ones', () => {
+  const log = 'c3\tAdd thing (#12)\nc2\tDocument rules\nc1\tEarlier work (#12) (#13)';
+  const refs = parseCommitRefs(log, ['c3']);
+  assert.deepEqual(refs[12], { sha: 'c3', pushed: false });
+  assert.deepEqual(refs[13], { sha: 'c1', pushed: true });
+  assert.equal(Object.keys(refs).length, 2);
+  assert.deepEqual(parseCommitRefs(log)[12], { sha: 'c3', pushed: true });
+});
+
 test('pickNextUp takes the lowest unassigned ready card, then falls back to human, then null', () => {
   const cards = [card(5, 'readyForAgent'), card(3, 'readyForAgent', ['me']), card(4, 'blocked'), card(9, 'needsYou')];
   assert.deepEqual(pickNextUp(cards), { kind: 'agent', number: 5 });
@@ -41,7 +59,7 @@ test('pickNextUp takes the lowest unassigned ready card, then falls back to huma
   assert.equal(pickNextUp([card(1, 'done')]), null);
 });
 
-test('organize separates active parents, completed parents (capped at 10) and the inbox', () => {
+test('organize separates active parents, tidy parents, completed parents (capped at 10) and the inbox', () => {
   const issues = [
     issue(1, { subTotal: 2, labels: ['wayfinder:map'] }), issue(2, { parent: 1, state: 'CLOSED' }), issue(3, { parent: 1 }),
     issue(10, { subTotal: 1, state: 'CLOSED' }), issue(11, { parent: 10, state: 'CLOSED' }),
@@ -57,37 +75,52 @@ test('organize separates active parents, completed parents (capped at 10) and th
   assert.equal(organize(many, roles).completed.length, 10);
 });
 
-test('a parent whose children are all closed is completed even while open', () => {
+test('an open parent whose children are all closed is tidy, not completed', () => {
   const org = organize([issue(1, { subTotal: 1 }), issue(2, { parent: 1, state: 'CLOSED' })], roles);
   assert.equal(org.overview.length, 0);
-  assert.equal(org.completed[0].percent, 100);
+  assert.deepEqual(org.tidy.map((s) => s.number), [1]);
+  assert.equal(org.completed.length, 0);
 });
 
-test('pickSelection prefers request, then last used, then most recently active', () => {
+test('a closed parent with open children stays active, and upcoming skips containers', () => {
   const org = organize([
-    issue(1, { subTotal: 1, updatedAt: '2026-01-01T00:00:00Z' }), issue(2, { parent: 1, updatedAt: '2026-01-01T00:00:00Z' }),
-    issue(3, { subTotal: 1, updatedAt: '2026-02-01T00:00:00Z' }), issue(4, { parent: 3, updatedAt: '2026-02-01T00:00:00Z' }),
+    issue(1, { subTotal: 2, state: 'CLOSED' }), issue(2, { parent: 1 }), issue(3, { parent: 1 }),
+    issue(4, { labels: ['tracker'] }), issue(5),
   ], roles);
-  assert.equal(pickSelection(org, undefined, undefined), 3);
-  assert.equal(pickSelection(org, undefined, 1), 1);
-  assert.equal(pickSelection(org, 'inbox', 1), 'inbox');
-  assert.equal(pickSelection(org, 99, 1), 1);
-  assert.equal(pickSelection(organize([], roles), undefined, undefined), null);
+  assert.deepEqual(org.overview.map((s) => [s.number, s.state, s.done, s.total]), [[1, 'CLOSED', 0, 2]]);
+  assert.deepEqual(org.upcoming.map((i) => i.number), [2, 3, 5]);
 });
 
-test('buildModel returns the board for the selected parent with next up', () => {
-  const model = buildModel({
-    roles, requested: 1,
-    issues: [
-      issue(1, { subTotal: 3 }),
-      issue(2, { parent: 1, labels: ['ready-for-agent'], blockedBy: [{ number: 9, state: 'OPEN' }] }),
-      issue(3, { parent: 1, labels: ['ready-for-agent'] }),
-      issue(4, { parent: 1, labels: ['ready-for-human'] }),
-    ],
-  });
-  assert.deepEqual(model.selection.cards.map((c) => [c.number, c.lane]), [[2, 'blocked'], [3, 'readyForAgent'], [4, 'needsYou']]);
-  assert.deepEqual(model.selection.cards[0].blockers, [9]);
-  assert.deepEqual(model.selection.nextUp, { kind: 'agent', number: 3 });
+test('pickSelection honours inbox, upcoming and known parents, else defaults to upcoming', () => {
+  const org = organize([issue(1, { subTotal: 1 }), issue(2, { parent: 1 })], roles);
+  assert.equal(pickSelection(org, undefined), 'upcoming');
+  assert.equal(pickSelection(org, 'inbox'), 'inbox');
+  assert.equal(pickSelection(org, 1), 1);
+  assert.equal(pickSelection(org, 99), 'upcoming');
+  assert.equal(pickSelection(organize([], roles), undefined), 'upcoming');
+});
+
+test('buildModel: upcoming spans parents, next up is global, blockers carry titles and parents', () => {
+  const issues = [
+    issue(1, { subTotal: 2 }), issue(10, { subTotal: 1 }),
+    issue(2, { parent: 1, labels: ['ready-for-agent'], blockedBy: [{ number: 11, title: 'Other parent work', state: 'OPEN' }] }),
+    issue(3, { parent: 1, labels: ['ready-for-human'], milestone: 'v2' }),
+    issue(11, { parent: 10, labels: ['ready-for-agent'] }),
+    issue(12, { labels: ['ready-for-agent'] }),
+  ];
+  const model = buildModel({ roles, issues, requested: 1, commitsByIssue: { 12: { sha: 'abc', pushed: false } } });
+  assert.deepEqual(model.selection.cards.map((c) => [c.number, c.lane]), [[2, 'blocked'], [3, 'needsYou']]);
+  assert.deepEqual(model.nextUp.card.number, 11);
+  assert.equal(model.nextUp.kind, 'agent');
+
+  const upcoming = buildModel({ roles, issues, commitsByIssue: { 12: { sha: 'abc', pushed: false } } });
+  assert.equal(upcoming.selectedKey, 'upcoming');
+  assert.equal(upcoming.upcomingCount, 4);
+  const byNumber = Object.fromEntries(upcoming.selection.cards.map((c) => [c.number, c]));
+  assert.deepEqual(byNumber[2].blockers, [{ number: 11, title: 'Other parent work' }]);
+  assert.deepEqual(byNumber[2].parent, { number: 1, title: 'Issue 1' });
+  assert.equal(byNumber[3].milestone, 'v2');
+  assert.equal(byNumber[12].lane, 'awaiting');
 });
 
 test('parseRepoSlug handles https and ssh remotes', () => {
