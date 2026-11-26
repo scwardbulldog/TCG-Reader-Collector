@@ -35,6 +35,17 @@ The APK is written to `app/build/outputs/apk/debug/app-debug.apk`.
 
 The app needs no account, backend or Play Store services.
 
+## Test devices
+
+The app's `minSdk` is 33 (Android 13). With several devices attached, Gradle installs on all of them; use `adb -s <serial>` for single-device commands.
+
+| Device | Serial | Android | ABI | Screen | RAM | Role |
+| --- | --- | --- | --- | --- | --- | --- |
+| Pixel 10 Pro (owner's phone) | 57221FDCH0053C | 17 | arm64 | | | Primary target; scanning prototype was proven here |
+| Motorola moto g play - 2023 | ZY22K6NFV6 | 13 (API 33) | armeabi-v7a (32-bit only) | 720x1600, 280 dpi | 2.8 GB | Low-end test device: oldest Android and slowest hardware we support, with a rear camera with autofocus and flash. No screen lock; if the screen is off, `adb shell input keyevent KEYCODE_WAKEUP` and `adb shell wm dismiss-keyguard`. |
+
+Run `.\gradlew.bat :app:connectedDebugAndroidTest` and `:app:installDebug` against whichever is attached. The Catalog download needs a build-time token (see below), so a tokenless build on a device shows "No Catalog token was built into this app".
+
 ## Catalog download
 
 On launch, and from the menu's "Update catalog", the app downloads `onepiece-en.json` and `onepiece-jp.json` from the private `scwardbulldog/TCG-Catalog` repo and stores them in the local database (see [the Catalog file format](docs/catalog-format.md)). A failed or malformed download keeps the previous Catalog. The ETag of each file is its stored version, so an unchanged Catalog is not downloaded again.
