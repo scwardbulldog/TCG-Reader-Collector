@@ -107,4 +107,31 @@ class PrintingDetailTest {
         assertEquals(listOf(created), detail.state.value.locations)
         assertEquals(listOf(created), collection.locations())
     }
+
+    @Test
+    fun `a Location filter shows only the Owned Copies kept there`() = runTest {
+        val binder = collection.createLocation("Binder 1")
+        val bulk = collection.createLocation("Bulk box A")
+        val a = collection.add(NewOwnedCopy(zoro, location = binder.id))
+        val b = collection.add(NewOwnedCopy(zoro, location = binder.id))
+        collection.add(NewOwnedCopy(zoro, location = bulk.id))
+        val filtered = PrintingDetail(zoro, collection, catalog, location = binder.id)
+
+        filtered.load()
+
+        assertEquals(listOf(a, b), filtered.state.value.copies)
+    }
+
+    @Test
+    fun `an Owned Copy moved out of the filtered Location stays visible while it is edited`() = runTest {
+        val binder = collection.createLocation("Binder 1")
+        val bulk = collection.createLocation("Bulk box A")
+        val moved = collection.add(NewOwnedCopy(zoro, location = binder.id))
+        val filtered = PrintingDetail(zoro, collection, catalog, location = binder.id)
+        filtered.load()
+
+        filtered.save(moved.copy(location = bulk.id))
+
+        assertEquals(listOf(moved.copy(location = bulk.id)), filtered.state.value.copies)
+    }
 }

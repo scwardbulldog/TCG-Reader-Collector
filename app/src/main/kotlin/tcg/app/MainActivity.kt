@@ -116,8 +116,8 @@ private fun CollectionApp(
     }
 
     val current = selected
+    val viewModel = viewModel<CollectionViewModel>(initializer = { CollectionViewModel(CollectionList(collection, catalog)) })
     if (current == null) {
-        val viewModel = viewModel<CollectionViewModel>(initializer = { CollectionViewModel(CollectionList(collection, catalog)) })
         CollectionScreen(
             viewModel = viewModel,
             actions = CollectionActions(
@@ -142,9 +142,9 @@ private fun CollectionApp(
         )
     } else {
         BackHandler { selected = null }
-        val viewModel = viewModel<PrintingDetailViewModel>(
-            initializer = { PrintingDetailViewModel { PrintingDetail(it, collection, catalog) } },
+        val detailViewModel = viewModel<PrintingDetailViewModel>(
+            initializer = { PrintingDetailViewModel { printing, location -> PrintingDetail(printing, collection, catalog, location) } },
         )
-        PrintingDetailScreen(viewModel, current, onBack = { selected = null })
+        PrintingDetailScreen(detailViewModel, current, viewModel.filter.location, onBack = { selected = null })
     }
 }

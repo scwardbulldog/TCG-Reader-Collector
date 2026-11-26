@@ -7,10 +7,12 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
+import tcg.domain.Location
 import tcg.domain.LocationId
 import tcg.domain.OwnedCopy
 import tcg.domain.OwnedCopyId
 import tcg.domain.PrintingIdentifier
+import tcg.domain.collection.CollectionFilter
 import tcg.domain.collection.CollectionList
 import tcg.domain.collection.CollectionRow
 import tcg.domain.collection.PrintingDetail
@@ -20,8 +22,17 @@ class CollectionViewModel(private val list: CollectionList) : ViewModel() {
     var search by mutableStateOf("")
         private set
 
+    var filter by mutableStateOf(CollectionFilter())
+        private set
+
     /** Null until the first load finishes. */
     var rows by mutableStateOf<List<CollectionRow>?>(null)
+        private set
+
+    var releaseProducts by mutableStateOf<List<String>>(emptyList())
+        private set
+
+    var locations by mutableStateOf<List<Location>>(emptyList())
         private set
 
     private var loading: Job? = null
@@ -31,9 +42,18 @@ class CollectionViewModel(private val list: CollectionList) : ViewModel() {
         refresh()
     }
 
+    fun onFilterChanged(changed: CollectionFilter) {
+        filter = changed
+        refresh()
+    }
+
     fun refresh() {
         loading?.cancel()
-        loading = viewModelScope.launch { rows = list.rows(search) }
+        loading = viewModelScope.launch {
+            releaseProducts = list.releaseProducts()
+            locations = list.locations()
+            rows = list.rows(search, filter)
+        }
     }
 }
 
@@ -41,16 +61,16 @@ class CollectionViewModel(private val list: CollectionList) : ViewModel() {
  * One instance serves every Printing detail visit: [show] switches it to another Printing, so
  * visiting many Printings never accumulates view models.
  */
-class PrintingDetailViewModel(private val detailFor: (PrintingIdentifier) -> PrintingDetail) : ViewModel() {
+class PrintingDetailViewModel(private val detailFor: (PrintingIdentifier, LocationId?) -> PrintingDetail) : ViewModel() {
     var state by mutableStateOf(PrintingDetailState())
         private set
 
     private var detail: PrintingDetail? = null
     private var showing: Job? = null
 
-    fun show(printing: PrintingIdentifier) {
+    fun show(printing: PrintingIdentifier, location: LocationId? = null) {
         showing?.cancel()
-        val next = detailFor(printing)
+        val next = detailFor(printing, location)
         detail = next
         state = PrintingDetailState()
         showing = viewModelScope.launch {

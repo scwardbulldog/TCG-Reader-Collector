@@ -46,8 +46,13 @@ import tcg.domain.onepiece.OnePiece
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun PrintingDetailScreen(viewModel: PrintingDetailViewModel, printing: PrintingIdentifier, onBack: () -> Unit) {
-    LaunchedEffect(printing) { viewModel.show(printing) }
+fun PrintingDetailScreen(
+    viewModel: PrintingDetailViewModel,
+    printing: PrintingIdentifier,
+    locationFilter: LocationId?,
+    onBack: () -> Unit,
+) {
+    LaunchedEffect(printing) { viewModel.show(printing, locationFilter) }
     val state = viewModel.state
     val entry = state.catalogEntry
 

@@ -1,6 +1,7 @@
 package tcg.app.ui
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -8,6 +9,8 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
@@ -37,7 +40,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import tcg.domain.Language
 import tcg.domain.PrintingIdentifier
+import tcg.domain.Variant
 import tcg.domain.collection.CollectionRow
 import tcg.domain.onepiece.OnePiece
 
@@ -102,11 +107,13 @@ fun CollectionScreen(
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
             )
+            FilterBar(viewModel)
             when {
                 rows == null -> Unit
                 rows.isEmpty() -> EmptyState(
-                    if (viewModel.search.isBlank()) "Your Collection is empty.\nTap + to add your first cards."
-                    else "No cards match your search.",
+                    if (viewModel.search.isBlank() && !viewModel.filter.isActive) {
+                        "Your Collection is empty.\nTap + to add your first cards."
+                    } else "Nothing in your Collection matches your search and filters.",
                 )
                 else -> LazyColumn(Modifier.fillMaxSize()) {
                     items(rows, key = { with(it.printing) { "$game/$language/$sourceId" } }) { row ->
@@ -116,6 +123,46 @@ fun CollectionScreen(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun FilterBar(viewModel: CollectionViewModel) {
+    val filter = viewModel.filter
+    val any = "Any"
+    val width = Modifier.width(200.dp)
+    Row(
+        Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Picker(
+            label = "Release Product",
+            value = filter.releaseProduct ?: any,
+            options = listOf<Pair<String, () -> Unit>>(any to { viewModel.onFilterChanged(filter.copy(releaseProduct = null)) }) +
+                viewModel.releaseProducts.map { it to { viewModel.onFilterChanged(filter.copy(releaseProduct = it)) } },
+            modifier = width,
+        )
+        Picker(
+            label = "Language",
+            value = filter.language?.label() ?: any,
+            options = listOf<Pair<String, () -> Unit>>(any to { viewModel.onFilterChanged(filter.copy(language = null)) }) +
+                Language.entries.map { it.label() to { viewModel.onFilterChanged(filter.copy(language = it)) } },
+            modifier = width,
+        )
+        Picker(
+            label = "Variant",
+            value = filter.variant?.label() ?: any,
+            options = listOf<Pair<String, () -> Unit>>(any to { viewModel.onFilterChanged(filter.copy(variant = null)) }) +
+                Variant.entries.map { it.label() to { viewModel.onFilterChanged(filter.copy(variant = it)) } },
+            modifier = width,
+        )
+        Picker(
+            label = "Location",
+            value = viewModel.locations.firstOrNull { it.id == filter.location }?.name ?: any,
+            options = listOf<Pair<String, () -> Unit>>(any to { viewModel.onFilterChanged(filter.copy(location = null)) }) +
+                viewModel.locations.map { it.name to { viewModel.onFilterChanged(filter.copy(location = it.id)) } },
+            modifier = width,
+        )
     }
 }
 
