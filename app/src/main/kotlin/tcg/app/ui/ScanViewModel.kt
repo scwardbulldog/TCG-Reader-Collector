@@ -1,5 +1,6 @@
 package tcg.app.ui
 
+import android.os.SystemClock
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -12,6 +13,8 @@ import tcg.domain.Condition
 import tcg.domain.Language
 import tcg.domain.Location
 import tcg.domain.Printing
+import tcg.domain.scanning.BaseNumberLocker
+import tcg.domain.scanning.BaseNumberRead
 import tcg.domain.scanning.ScanSessionInput
 import tcg.domain.scanning.ScanLookup
 import tcg.domain.scanning.ScanSetup
@@ -26,7 +29,13 @@ sealed interface ScanInputResult {
     data class SearchResults(val printings: List<Printing>) : ScanInputResult
 }
 
-class ScanViewModel(private val catalog: CatalogStore, private val collection: CollectionStore) : ViewModel() {
+class ScanViewModel(
+    private val catalog: CatalogStore,
+    private val collection: CollectionStore,
+    private val clock: () -> Long = SystemClock::elapsedRealtime,
+) : ViewModel() {
+    private var locker = BaseNumberLocker()
+
     var setup by mutableStateOf(ScanSetup())
         private set
     var locations by mutableStateOf<List<Location>>(emptyList())
@@ -73,6 +82,7 @@ class ScanViewModel(private val catalog: CatalogStore, private val collection: C
     fun start() {
         val session = setup.start() ?: return
         sessionInput = ScanSessionInput(session, catalog, collection)
+        locker = BaseNumberLocker()
         clearInput()
         lastAdded = null
     }
@@ -90,14 +100,25 @@ class ScanViewModel(private val catalog: CatalogStore, private val collection: C
 
     fun lookUp() {
         val current = sessionInput ?: return
-        viewModelScope.launch {
-            when (val lookup = current.lookup(query)) {
-                is ScanLookup.Candidates -> {
-                    result = ScanInputResult.None
-                    confirmation = Confirmation(lookup.printings, lookup.preselected)
-                }
-                is ScanLookup.NoMatch -> result = ScanInputResult.NoMatch(lookup.baseNumber)
+        viewModelScope.launch { show(current.lookup(query)) }
+    }
+
+    /**
+     * A Base Number read by the camera. Reads count as votes; a locked number only fills the text field,
+     * so the collector sees the finding and taps Look up themselves.
+     */
+    fun onRead(read: BaseNumberRead) {
+        if (sessionInput == null || confirmation != null) return
+        query = locker.read(read.baseNumber, clock()) ?: return
+    }
+
+    private fun show(lookup: ScanLookup) {
+        when (lookup) {
+            is ScanLookup.Candidates -> {
+                result = ScanInputResult.None
+                confirmation = Confirmation(lookup.printings, lookup.preselected)
             }
+            is ScanLookup.NoMatch -> result = ScanInputResult.NoMatch(lookup.baseNumber)
         }
     }
 
@@ -106,9 +127,14 @@ class ScanViewModel(private val catalog: CatalogStore, private val collection: C
         viewModelScope.launch { result = ScanInputResult.SearchResults(current.search(query)) }
     }
 
+    fun dismissSearch() {
+        result = ScanInputResult.None
+    }
+
     /** Dismisses the no-match message and keeps the text so the collector can edit it and search. */
     fun searchManually() {
         result = ScanInputResult.None
+        finishVerdict()
     }
 
     /** Gives up on a no-match: nothing is added. */
@@ -132,6 +158,7 @@ class ScanViewModel(private val catalog: CatalogStore, private val collection: C
 
     fun cancelConfirmation() {
         confirmation = null
+        finishVerdict()
     }
 
     fun confirm() {
@@ -149,5 +176,9 @@ class ScanViewModel(private val catalog: CatalogStore, private val collection: C
         query = ""
         result = ScanInputResult.None
         confirmation = null
+        finishVerdict()
     }
+
+    /** The collector dealt with the last lock: added, cancelled or skipped it. */
+    private fun finishVerdict() = locker.verdict(clock())
 }

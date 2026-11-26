@@ -1,0 +1,190 @@
+package tcg.app.scanning
+
+import android.content.Context
+import android.graphics.Bitmap
+import android.graphics.Rect
+import androidx.camera.core.Camera
+import androidx.camera.core.CameraSelector
+import androidx.camera.core.ImageAnalysis
+import androidx.camera.core.ImageProxy
+import androidx.camera.core.Preview
+import androidx.camera.core.UseCaseGroup
+import androidx.camera.core.resolutionselector.AspectRatioStrategy
+import androidx.camera.core.resolutionselector.ResolutionSelector
+import androidx.camera.core.resolutionselector.ResolutionStrategy
+import androidx.camera.lifecycle.ProcessCameraProvider
+import androidx.camera.view.PreviewView
+import androidx.core.content.ContextCompat
+import androidx.lifecycle.LifecycleOwner
+import com.google.mlkit.vision.common.InputImage
+import com.google.mlkit.vision.text.TextRecognition
+import com.google.mlkit.vision.text.latin.TextRecognizerOptions
+import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.suspendCancellableCoroutine
+import tcg.domain.Game
+import tcg.domain.onepiece.OnePiece
+import tcg.domain.scanning.BaseNumberRead
+import tcg.domain.scanning.CardScanner
+import tcg.domain.scanning.ScanScope
+import java.util.concurrent.Executors
+import kotlin.coroutines.resume
+import kotlin.coroutines.resumeWithException
+
+/**
+ * [CardScanner] backed by CameraX and ML Kit's bundled Latin text recognizer. It binds the camera to
+ * [lifecycleOwner] while the flow is collected and shows the preview in [previewView].
+ *
+ * Preview and analysis share one view port, so each analysed frame is cropped to the visible preview and
+ * then to [CardOutline]: only the region the collector sees inside the outline is read.
+ */
+class CameraXCardScanner(
+    private val context: Context,
+    private val lifecycleOwner: LifecycleOwner,
+    private val previewView: PreviewView,
+) : CardScanner {
+    private var camera: Camera? = null
+    private var torchOn = false
+
+    /** Applied now if the camera is bound, and again on every later bind. */
+    fun setTorch(enabled: Boolean) {
+        torchOn = enabled
+        camera?.cameraControl?.enableTorch(enabled)
+    }
+
+    override fun scan(scope: ScanScope): Flow<BaseNumberRead> = callbackFlow {
+        val extract: (String) -> String? = when (scope.game) {
+            Game.OnePiece -> OnePiece::baseNumberIn
+        }
+        val provider = cameraProvider()
+        var viewPort = previewView.viewPort
+        while (viewPort == null) {
+            delay(VIEW_PORT_POLL_MILLIS)
+            viewPort = previewView.viewPort
+        }
+
+        val aspect = AspectRatioStrategy.RATIO_16_9_FALLBACK_AUTO_STRATEGY
+        val preview = Preview.Builder()
+            .setResolutionSelector(ResolutionSelector.Builder().setAspectRatioStrategy(aspect).build())
+            .build()
+            .also { it.surfaceProvider = previewView.surfaceProvider }
+        val analysis = ImageAnalysis.Builder()
+            .setResolutionSelector(
+                ResolutionSelector.Builder()
+                    .setAspectRatioStrategy(aspect)
+                    .setResolutionStrategy(
+                        ResolutionStrategy(ANALYSIS_SIZE, ResolutionStrategy.FALLBACK_RULE_CLOSEST_HIGHER_THEN_LOWER),
+                    ).build(),
+            )
+            .setOutputImageFormat(ImageAnalysis.OUTPUT_IMAGE_FORMAT_RGBA_8888)
+            .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
+            .build()
+
+        val executor = Executors.newSingleThreadExecutor()
+        // Results are handled on the main executor, which outlives this flow, so late callbacks are never rejected.
+        val mainExecutor = ContextCompat.getMainExecutor(context)
+        val recognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
+        analysis.setAnalyzer(executor) { proxy ->
+            val image = runCatching { outlineImage(proxy) }.getOrNull()
+            if (image == null) {
+                proxy.close()
+                return@setAnalyzer
+            }
+            recognizer.process(image)
+                .addOnSuccessListener(mainExecutor) { text ->
+                    // The Base Number is printed at the bottom of the card, so prefer the lowest match.
+                    text.textBlocks.flatMap { it.lines }
+                        .mapNotNull { line -> extract(line.text)?.let { it to (line.boundingBox?.bottom ?: 0) } }
+                        .maxByOrNull { it.second }
+                        ?.let { trySend(BaseNumberRead(it.first)) }
+                }
+                .addOnCompleteListener(mainExecutor) { proxy.close() }
+        }
+
+        fun release() {
+            analysis.clearAnalyzer()
+            provider.unbind(preview, analysis)
+            camera = null
+            executor.shutdown()
+            recognizer.close()
+        }
+
+        try {
+            provider.unbindAll()
+            camera = provider.bindToLifecycle(
+                lifecycleOwner,
+                CameraSelector.DEFAULT_BACK_CAMERA,
+                UseCaseGroup.Builder().setViewPort(viewPort).addUseCase(preview).addUseCase(analysis).build(),
+            )
+            camera?.cameraControl?.enableTorch(torchOn)
+        } catch (e: Exception) {
+            release()
+            throw e
+        }
+
+        awaitClose { release() }
+    }
+
+    private suspend fun cameraProvider(): ProcessCameraProvider = suspendCancellableCoroutine { continuation ->
+        val future = ProcessCameraProvider.getInstance(context)
+        future.addListener({
+            try {
+                continuation.resume(future.get())
+            } catch (e: Exception) {
+                continuation.resumeWithException(e)
+            }
+        }, ContextCompat.getMainExecutor(context))
+    }
+
+    /** The part of [proxy] inside [CardOutline], upright for ML Kit; null if the frame has no usable area. */
+    private fun outlineImage(proxy: ImageProxy): InputImage? {
+        val rotation = proxy.imageInfo.rotationDegrees
+        val region = outlineInBuffer(proxy.cropRect, rotation) ?: return null
+        val bitmap = proxy.toBitmap()
+        val clipped = Rect(region).apply { intersect(0, 0, bitmap.width, bitmap.height) }
+        if (clipped.width() < MIN_REGION_PX || clipped.height() < MIN_REGION_PX) return null
+        val cropped = Bitmap.createBitmap(bitmap, clipped.left, clipped.top, clipped.width(), clipped.height())
+        return InputImage.fromBitmap(cropped, rotation)
+    }
+
+    private companion object {
+        const val VIEW_PORT_POLL_MILLIS = 50L
+        const val MIN_REGION_PX = 32
+        val ANALYSIS_SIZE = android.util.Size(1920, 1080)
+    }
+}
+
+/**
+ * [CardOutline] mapped into the unrotated image buffer. [visible] is the buffer area the preview shows
+ * (the view port's crop); the frame is shown rotated by [rotation], so the outline is placed on the
+ * rotated visible area and then rotated back into buffer coordinates.
+ */
+internal fun outlineInBuffer(visible: Rect, rotation: Int): Rect? {
+    val width = visible.width()
+    val height = visible.height()
+    if (width <= 0 || height <= 0) return null
+    val rotatedWidth = if (rotation % 180 == 0) width else height
+    val rotatedHeight = if (rotation % 180 == 0) height else width
+    val outline = CardOutline.within(rotatedWidth.toFloat() / rotatedHeight)
+    val left = outline.left * rotatedWidth
+    val top = outline.top * rotatedHeight
+    val right = outline.right * rotatedWidth
+    val bottom = outline.bottom * rotatedHeight
+
+    fun toBuffer(x: Float, y: Float): Pair<Float, Float> = when (rotation) {
+        90 -> y to height - x
+        180 -> width - x to height - y
+        270 -> width - y to x
+        else -> x to y
+    }
+    val (ax, ay) = toBuffer(left, top)
+    val (bx, by) = toBuffer(right, bottom)
+    return Rect(
+        visible.left + minOf(ax, bx).toInt(),
+        visible.top + minOf(ay, by).toInt(),
+        visible.left + maxOf(ax, bx).toInt(),
+        visible.top + maxOf(ay, by).toInt(),
+    )
+}

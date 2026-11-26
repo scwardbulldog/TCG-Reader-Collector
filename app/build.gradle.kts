@@ -65,7 +65,7 @@ dependencies {
     implementation("androidx.activity:activity-compose:1.9.3")
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.7")
 
-    // Declared for the camera scanning slice; not used yet.
+    // CameraX for the live preview and frame analysis; see tcg.app.scanning.
     val cameraX = "1.4.1"
     implementation("androidx.camera:camera-core:$cameraX")
     implementation("androidx.camera:camera-camera2:$cameraX")

@@ -1,7 +1,9 @@
 package tcg.app.ui
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -33,6 +35,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
 import tcg.domain.Condition
 import tcg.domain.Language
@@ -65,8 +68,15 @@ fun ScanSessionScreen(viewModel: ScanViewModel, onClose: () -> Unit) {
         Column(Modifier.fillMaxSize().padding(padding)) {
             when {
                 sessionInput == null -> SetupForm(viewModel)
-                confirmation != null -> ConfirmationForm(viewModel, confirmation)
-                else -> InputForm(viewModel)
+                else -> Box(Modifier.fillMaxSize()) {
+                    // The camera stays bound beneath the confirmation, so the torch and the cooldown carry over to the next card.
+                    InputForm(viewModel)
+                    if (confirmation != null) {
+                        Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).pointerInput(Unit) {}) {
+                            ConfirmationForm(viewModel, confirmation)
+                        }
+                    }
+                }
             }
         }
     }
@@ -121,8 +131,12 @@ private fun SetupForm(viewModel: ScanViewModel) {
 @Composable
 private fun InputForm(viewModel: ScanViewModel) {
     val result = viewModel.result
+    val scope = viewModel.sessionInput?.session?.scope
     Column(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         viewModel.lastAdded?.let { Text(it, color = MaterialTheme.colorScheme.primary) }
+        if (scope != null && result !is ScanInputResult.SearchResults) {
+            ScanCameraPane(scope, onRead = viewModel::onRead, modifier = Modifier.weight(1f).fillMaxWidth())
+        }
         OutlinedTextField(
             value = viewModel.query,
             onValueChange = viewModel::onQueryChanged,
@@ -147,10 +161,11 @@ private fun InputForm(viewModel: ScanViewModel) {
                 }
             }
             is ScanInputResult.SearchResults -> {
+                TextButton(onClick = viewModel::dismissSearch) { Text("Back to camera") }
                 if (result.printings.isEmpty()) {
                     Text("No cards match your search.", style = MaterialTheme.typography.bodyLarge)
                 } else {
-                    LazyColumn(Modifier.fillMaxSize()) {
+                    LazyColumn(Modifier.weight(1f)) {
                         items(result.printings, key = { it.identifier.sourceId }) { printing ->
                             PrintingRow(printing, Modifier.clickable { viewModel.openSearchResult(printing) })
                             HorizontalDivider()
