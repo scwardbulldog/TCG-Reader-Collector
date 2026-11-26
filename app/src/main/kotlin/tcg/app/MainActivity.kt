@@ -1,9 +1,11 @@
 package tcg.app
 
+import android.net.Uri
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
@@ -17,7 +19,10 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.viewmodel.compose.viewModel
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import tcg.app.catalog.GitHubCatalogSource
 import tcg.app.catalog.summary
 import tcg.app.storage.AppDatabase
@@ -32,15 +37,21 @@ import tcg.domain.Game
 import tcg.domain.Language
 import tcg.domain.PrintingIdentifier
 import tcg.domain.catalog.CatalogUpdater
+import tcg.domain.collection.CollectionExport
 import tcg.domain.collection.CollectionList
 import tcg.domain.collection.LastKnownPrintings
 import tcg.domain.collection.PrintingDetail
+import java.io.IOException
+import java.time.LocalDate
 
 class MainActivity : ComponentActivity() {
     private var updating by mutableStateOf(false)
     private var catalogRevision by mutableIntStateOf(0)
     private val catalogMessages = SnackbarHostState()
 
+    private val exportTarget = registerForActivityResult(ActivityResultContracts.CreateDocument("text/csv")) { uri ->
+        if (uri != null) exportCsv(uri)
+    }
     private val database get() = (application as TcgApplication).database
 
     private val catalogUpdater by lazy {
@@ -62,8 +73,27 @@ class MainActivity : ComponentActivity() {
                     catalogRevision = catalogRevision,
                     snackbarHostState = catalogMessages,
                     onUpdateCatalog = ::updateCatalog,
+                    onExportCsv = { exportTarget.launch("tcg-collection-${LocalDate.now()}.csv") },
                 )
             }
+        }
+    }
+
+    private fun exportCsv(uri: Uri) {
+        lifecycleScope.launch {
+            val message = try {
+                val csv = CollectionExport(database.collectionStore(), database.catalogStore()).csv()
+                withContext(Dispatchers.IO) {
+                    val stream = contentResolver.openOutputStream(uri) ?: throw IOException("Cannot open $uri")
+                    stream.bufferedWriter(Charsets.UTF_8).use { it.write(csv) }
+                }
+                "Exported the Collection as CSV"
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                "CSV export failed: ${e.message ?: "could not write the file"}"
+            }
+            catalogMessages.showSnackbar(message)
         }
     }
 
@@ -94,6 +124,7 @@ private fun CollectionApp(
     catalogRevision: Int,
     snackbarHostState: SnackbarHostState,
     onUpdateCatalog: () -> Unit,
+    onExportCsv: () -> Unit,
 ) {
     var selected by rememberSaveable(stateSaver = printingSaver) { mutableStateOf<PrintingIdentifier?>(null) }
     var scanning by rememberSaveable { mutableStateOf(false) }
@@ -101,7 +132,7 @@ private fun CollectionApp(
     val catalog = remember { database.catalogStore() }
     val collection = remember { database.collectionStore() }
 
-    // Each stub is where a later slice (CSV, backup, restore) plugs in.
+    // Each stub is where a later slice (backup, restore) plugs in.
     fun comingSoon(feature: String) {
         scope.launch { snackbarHostState.showSnackbar("$feature is not available yet") }
     }
@@ -124,7 +155,7 @@ private fun CollectionApp(
             viewModel = viewModel,
             actions = CollectionActions(
                 onAdd = { scanning = true },
-                onExportCsv = { comingSoon("CSV export") },
+                onExportCsv = onExportCsv,
                 onBackup = { comingSoon("Backup") },
                 onRestore = { comingSoon("Restore") },
                 onUpdateCatalog = onUpdateCatalog,
