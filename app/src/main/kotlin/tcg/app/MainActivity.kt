@@ -2,40 +2,48 @@ package tcg.app
 
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.listSaver
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
 import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.viewmodel.compose.viewModel
 import kotlinx.coroutines.launch
 import tcg.app.catalog.GitHubCatalogSource
 import tcg.app.catalog.summary
+import tcg.app.storage.AppDatabase
+import tcg.app.ui.CollectionActions
+import tcg.app.ui.CollectionScreen
+import tcg.app.ui.CollectionViewModel
+import tcg.app.ui.PrintingDetailScreen
+import tcg.app.ui.PrintingDetailViewModel
+import tcg.domain.Game
+import tcg.domain.Language
+import tcg.domain.PrintingIdentifier
 import tcg.domain.catalog.CatalogUpdater
+import tcg.domain.collection.CollectionList
+import tcg.domain.collection.PrintingDetail
 
 class MainActivity : ComponentActivity() {
-    private var catalogStatus by mutableStateOf("")
     private var updating by mutableStateOf(false)
+    private var catalogRevision by mutableIntStateOf(0)
+    private val catalogMessages = SnackbarHostState()
+
+    private val database get() = (application as TcgApplication).database
 
     private val catalogUpdater by lazy {
         CatalogUpdater(
             source = GitHubCatalogSource(BuildConfig.CATALOG_REPO, BuildConfig.CATALOG_TOKEN),
-            store = (application as TcgApplication).database.catalogStore(),
+            store = database.catalogStore(),
         )
     }
 
@@ -44,7 +52,13 @@ class MainActivity : ComponentActivity() {
         if (savedInstanceState == null) updateCatalog()
         setContent {
             MaterialTheme {
-                CatalogHome(catalogStatus, updating, onUpdateCatalog = ::updateCatalog)
+                CollectionApp(
+                    database = database,
+                    updatingCatalog = updating,
+                    catalogRevision = catalogRevision,
+                    snackbarHostState = catalogMessages,
+                    onUpdateCatalog = ::updateCatalog,
+                )
             }
         }
     }
@@ -52,43 +66,69 @@ class MainActivity : ComponentActivity() {
     private fun updateCatalog() {
         if (updating) return
         updating = true
-        catalogStatus = "Checking for a newer catalog…"
         lifecycleScope.launch {
-            try {
-                catalogStatus = catalogUpdater.update().summary()
+            val summary = try {
+                catalogUpdater.update().summary()
             } finally {
                 updating = false
             }
+            catalogRevision++
+            catalogMessages.showSnackbar(summary)
         }
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+private val printingSaver = listSaver<PrintingIdentifier?, String>(
+    save = { it?.let { p -> listOf(p.game.name, p.language.name, p.sourceId) } ?: emptyList() },
+    restore = { if (it.isEmpty()) null else PrintingIdentifier(Game.valueOf(it[0]), Language.valueOf(it[1]), it[2]) },
+)
+
 @Composable
-private fun CatalogHome(status: String, updating: Boolean, onUpdateCatalog: () -> Unit) {
-    var menuOpen by remember { mutableStateOf(false) }
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("TCG Collector") },
-                actions = {
-                    TextButton(onClick = { menuOpen = true }) { Text("⋮") }
-                    DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
-                        DropdownMenuItem(
-                            text = { Text("Update catalog") },
-                            enabled = !updating,
-                            onClick = {
-                                menuOpen = false
-                                onUpdateCatalog()
-                            },
-                        )
-                    }
-                },
-            )
-        },
-    ) { padding ->
-        Box(Modifier.fillMaxSize().padding(padding).padding(16.dp), contentAlignment = Alignment.Center) {
-            Text(status)
-        }
+private fun CollectionApp(
+    database: AppDatabase,
+    updatingCatalog: Boolean,
+    catalogRevision: Int,
+    snackbarHostState: SnackbarHostState,
+    onUpdateCatalog: () -> Unit,
+) {
+    var selected by rememberSaveable(stateSaver = printingSaver) { mutableStateOf<PrintingIdentifier?>(null) }
+    var opened by rememberSaveable { mutableIntStateOf(0) }
+    val scope = rememberCoroutineScope()
+    val catalog = remember { database.catalogStore() }
+    val collection = remember { database.collectionStore() }
+
+    // Each stub is where a later slice (Scan Session, CSV, backup, restore) plugs in.
+    fun comingSoon(feature: String) {
+        scope.launch { snackbarHostState.showSnackbar("$feature is not available yet") }
+    }
+
+    val current = selected
+    if (current == null) {
+        val viewModel = viewModel<CollectionViewModel>(initializer = { CollectionViewModel(CollectionList(collection, catalog)) })
+        CollectionScreen(
+            viewModel = viewModel,
+            actions = CollectionActions(
+                onAdd = { comingSoon("Scanning") },
+                onExportCsv = { comingSoon("CSV export") },
+                onBackup = { comingSoon("Backup") },
+                onRestore = { comingSoon("Restore") },
+                onUpdateCatalog = onUpdateCatalog,
+            ),
+            updatingCatalog = updatingCatalog,
+            catalogRevision = catalogRevision,
+            snackbarHostState = snackbarHostState,
+            onOpen = {
+                opened++
+                selected = it
+            },
+        )
+    } else {
+        BackHandler { selected = null }
+        // A fresh key per visit so the detail view model never shows a stale list.
+        val viewModel = viewModel<PrintingDetailViewModel>(
+            key = "$current#$opened",
+            initializer = { PrintingDetailViewModel(PrintingDetail(current, collection, catalog)) },
+        )
+        PrintingDetailScreen(viewModel, current, onBack = { selected = null })
     }
 }

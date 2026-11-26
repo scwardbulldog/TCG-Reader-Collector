@@ -28,6 +28,11 @@ interface CollectionStore {
 
     suspend fun ownedCopies(printing: PrintingIdentifier): List<OwnedCopy>
 
+    /** Saves a changed condition, Location or notes; the Printing of an Owned Copy never changes. */
+    suspend fun update(copy: OwnedCopy)
+
+    suspend fun delete(id: OwnedCopyId)
+
     /** How many Owned Copies each Printing has. */
     suspend fun countsByPrinting(): Map<PrintingIdentifier, Int>
 

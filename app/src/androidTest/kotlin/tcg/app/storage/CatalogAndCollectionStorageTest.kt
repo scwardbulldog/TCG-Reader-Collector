@@ -123,6 +123,23 @@ class CatalogAndCollectionStorageTest {
     }
 
     @Test
+    fun updating_an_owned_copy_changes_only_that_copy_and_deleting_removes_only_it() = runTest {
+        val id = PrintingIdentifier(Game.OnePiece, Language.English, "OP01-001")
+        val binder = collection.createLocation("Binder 1")
+        val first = collection.add(NewOwnedCopy(id))
+        val second = collection.add(NewOwnedCopy(id))
+
+        val edited = first.copy(condition = Condition.Damaged, location = binder.id, notes = "creased")
+        collection.update(edited)
+
+        assertEquals(listOf(edited, second), collection.ownedCopies(id))
+
+        collection.delete(first.id)
+
+        assertEquals(listOf(second), collection.ownedCopies(id))
+    }
+
+    @Test
     fun the_catalog_version_is_stored_with_the_printings_per_language() = runTest {
         val zoro = PrintingIdentifier(Game.OnePiece, Language.English, "OP01-001_p1")
         assertNull(catalog.catalogVersion(Game.OnePiece, Language.English))

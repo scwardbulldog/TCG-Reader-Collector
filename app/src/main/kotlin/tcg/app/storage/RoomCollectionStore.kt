@@ -27,6 +27,20 @@ class RoomCollectionStore(private val dao: CollectionDao) : CollectionStore {
     override suspend fun ownedCopies(printing: PrintingIdentifier): List<OwnedCopy> =
         dao.ownedCopies(printing.game, printing.language, printing.sourceId).map { it.toDomain() }
 
+    override suspend fun update(copy: OwnedCopy) = dao.update(
+        OwnedCopyEntity(
+            id = copy.id.value,
+            game = copy.printing.game,
+            language = copy.printing.language,
+            sourceId = copy.printing.sourceId,
+            condition = copy.condition,
+            locationId = copy.location?.value,
+            notes = copy.notes,
+        ),
+    )
+
+    override suspend fun delete(id: OwnedCopyId) = dao.delete(id.value)
+
     override suspend fun countsByPrinting(): Map<PrintingIdentifier, Int> =
         dao.countsByPrinting().associate { PrintingIdentifier(it.game, it.language, it.sourceId) to it.ownedCopyCount }
 

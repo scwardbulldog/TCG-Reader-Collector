@@ -5,6 +5,7 @@ import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Transaction
+import androidx.room.Update
 import tcg.domain.Game
 import tcg.domain.Language
 
@@ -43,6 +44,12 @@ interface CollectionDao {
 
     @Query("SELECT * FROM owned_copy WHERE game = :game AND language = :language AND sourceId = :sourceId ORDER BY id")
     suspend fun ownedCopies(game: Game, language: Language, sourceId: String): List<OwnedCopyEntity>
+
+    @Update
+    suspend fun update(copy: OwnedCopyEntity)
+
+    @Query("DELETE FROM owned_copy WHERE id = :id")
+    suspend fun delete(id: Long)
 
     @Query("SELECT game, language, sourceId, COUNT(*) AS ownedCopyCount FROM owned_copy GROUP BY game, language, sourceId")
     suspend fun countsByPrinting(): List<PrintingCount>

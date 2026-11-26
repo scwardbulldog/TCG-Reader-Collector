@@ -63,6 +63,7 @@ dependencies {
     implementation("androidx.compose.material3:material3")
     implementation("androidx.compose.ui:ui")
     implementation("androidx.activity:activity-compose:1.9.3")
+    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.7")
 
     // Declared for the camera scanning slice; not used yet.
     val cameraX = "1.4.1"
