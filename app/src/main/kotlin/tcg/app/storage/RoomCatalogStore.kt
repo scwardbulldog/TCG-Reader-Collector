@@ -18,6 +18,9 @@ class RoomCatalogStore(private val dao: CatalogDao) : CatalogStore {
 
     override suspend fun findByBaseNumber(game: Game, language: Language, baseNumber: String): List<Printing> =
         dao.findByBaseNumber(game, language, baseNumber).map { it.toDomain() }
+
+    override suspend fun search(game: Game, language: Language, query: String): List<Printing> =
+        dao.search(game, language, query.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")).map { it.toDomain() }
 }
 
 private fun Printing.toEntity() = CatalogPrintingEntity(

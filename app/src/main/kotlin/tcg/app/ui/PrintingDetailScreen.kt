@@ -189,7 +189,7 @@ private fun OwnedCopyEditor(
 }
 
 @Composable
-private fun Picker(label: String, value: String, options: List<Pair<String, () -> Unit>>, modifier: Modifier) {
+internal fun Picker(label: String, value: String, options: List<Pair<String, () -> Unit>>, modifier: Modifier) {
     var open by remember { mutableStateOf(false) }
     Box(modifier) {
         OutlinedButton(onClick = { open = true }, modifier = Modifier.fillMaxWidth()) {
@@ -207,7 +207,7 @@ private fun Picker(label: String, value: String, options: List<Pair<String, () -
 }
 
 @Composable
-private fun NewLocationDialog(onDismiss: () -> Unit, onCreate: (String) -> Unit) {
+internal fun NewLocationDialog(onDismiss: () -> Unit, onCreate: (String) -> Unit) {
     var name by remember { mutableStateOf("") }
     AlertDialog(
         onDismissRequest = onDismiss,

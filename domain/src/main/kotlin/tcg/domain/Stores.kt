@@ -15,6 +15,9 @@ interface CatalogStore {
 
     /** Base Number is a lookup aid, so several Printings (Variants) can match. */
     suspend fun findByBaseNumber(game: Game, language: Language, baseNumber: String): List<Printing>
+
+    /** Printings of one Game and Language whose Base Number or name contains [query], ignoring case. */
+    suspend fun search(game: Game, language: Language, query: String): List<Printing>
 }
 
 enum class DeleteLocationResult { Deleted, NotEmpty }

@@ -26,6 +26,8 @@ import tcg.app.ui.CollectionScreen
 import tcg.app.ui.CollectionViewModel
 import tcg.app.ui.PrintingDetailScreen
 import tcg.app.ui.PrintingDetailViewModel
+import tcg.app.ui.ScanSessionScreen
+import tcg.app.ui.ScanViewModel
 import tcg.domain.Game
 import tcg.domain.Language
 import tcg.domain.PrintingIdentifier
@@ -92,13 +94,25 @@ private fun CollectionApp(
     onUpdateCatalog: () -> Unit,
 ) {
     var selected by rememberSaveable(stateSaver = printingSaver) { mutableStateOf<PrintingIdentifier?>(null) }
+    var scanning by rememberSaveable { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     val catalog = remember { database.catalogStore() }
     val collection = remember { database.collectionStore() }
 
-    // Each stub is where a later slice (Scan Session, CSV, backup, restore) plugs in.
+    // Each stub is where a later slice (CSV, backup, restore) plugs in.
     fun comingSoon(feature: String) {
         scope.launch { snackbarHostState.showSnackbar("$feature is not available yet") }
+    }
+
+    if (scanning) {
+        val scanViewModel = viewModel<ScanViewModel>(initializer = { ScanViewModel(catalog, collection) })
+        val close = {
+            scanViewModel.endSession()
+            scanning = false
+        }
+        BackHandler(onBack = close)
+        ScanSessionScreen(scanViewModel, onClose = close)
+        return
     }
 
     val current = selected
@@ -107,7 +121,7 @@ private fun CollectionApp(
         CollectionScreen(
             viewModel = viewModel,
             actions = CollectionActions(
-                onAdd = { comingSoon("Scanning") },
+                onAdd = { scanning = true },
                 onExportCsv = { comingSoon("CSV export") },
                 onBackup = { comingSoon("Backup") },
                 onRestore = { comingSoon("Restore") },

@@ -35,6 +35,12 @@ interface CatalogDao {
 
     @Query("SELECT * FROM catalog_printing WHERE game = :game AND language = :language AND baseNumber = :baseNumber")
     suspend fun findByBaseNumber(game: Game, language: Language, baseNumber: String): List<CatalogPrintingEntity>
+
+    @Query(
+        "SELECT * FROM catalog_printing WHERE game = :game AND language = :language AND " +
+            "(baseNumber LIKE '%' || :pattern || '%' ESCAPE '\\' OR name LIKE '%' || :pattern || '%' ESCAPE '\\')",
+    )
+    suspend fun search(game: Game, language: Language, pattern: String): List<CatalogPrintingEntity>
 }
 
 @Dao

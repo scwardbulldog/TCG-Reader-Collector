@@ -23,4 +23,9 @@ class InMemoryCatalogStore : CatalogStore {
 
     override suspend fun findByBaseNumber(game: Game, language: Language, baseNumber: String): List<Printing> =
         printings[CatalogTarget(game, language)].orEmpty().filter { it.baseNumber == baseNumber }
+
+    override suspend fun search(game: Game, language: Language, query: String): List<Printing> =
+        printings[CatalogTarget(game, language)].orEmpty().filter {
+            it.baseNumber.contains(query, ignoreCase = true) || it.name.contains(query, ignoreCase = true)
+        }
 }
