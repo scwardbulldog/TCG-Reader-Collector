@@ -27,6 +27,10 @@ _Avoid_: Card ID, SKU
 A **Printing** that an **Owned Copy** refers to by **Printing identifier** only, because the **Catalog** has no record of it (e.g. after a restore).
 _Avoid_: Orphan, missing card
 
+**Custom Printing**:
+A **Printing** the collector recorded themselves because the **Catalog** has none for a card they hold, with the **Base Number**, **Language** and a free-text label they chose. It is part of the **Collection**, not the **Catalog**; unlike an **Unresolved Printing**, its details are the collector's own.
+_Avoid_: Manual card, homebrew, user-added card
+
 **No longer in the Catalog**:
 The flag on a **Printing** whose **Owned Copies** remain after a **Catalog** refresh dropped it. Its last-known details are kept and shown; unlike an **Unresolved Printing**, the app once had its details.
 _Avoid_: Deleted, removed, orphan
@@ -64,5 +68,5 @@ Where an **Owned Copy** is physically kept, e.g. "Binder 3" or "Bulk box A".
 _Avoid_: Storage, container, bin
 
 **Scan Session**:
-A run of consecutive scans for one **Game** and one collector-chosen **Language**.
+A run of consecutive scans for one **Game**. It has a current **Language** that the collector can change mid-session.
 _Avoid_: Batch, import
