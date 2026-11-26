@@ -5,7 +5,7 @@ A personal Android app that inventories One Piece cards by scanning them. See [t
 ## Layout
 
 - `domain/`: portable Kotlin/JVM module with no Android dependencies. The Printing, Variant and Owned Copy model, the `CatalogStore` / `CollectionStore` interfaces, One Piece rules (`tcg.domain.onepiece`), the Collection list and Printing detail logic (`tcg.domain.collection`) and the `CardScanner` interface live here. A `FakeCardScanner` and in-memory stores are in its test fixtures.
-- `app/`: Android app (Kotlin, Jetpack Compose). `tcg.app.storage` has the Room implementation, with the Catalog and Collection in separate tables. `tcg.app.ui` has the Collection list and Printing detail screens; the app opens on the Collection list. Add, CSV export, backup and restore are stubs until their slices land. CameraX and ML Kit text recognition (bundled Latin model) are declared but not used yet.
+- `app/`: Android app (Kotlin, Jetpack Compose). `tcg.app.storage` has the Room implementation, with the Catalog and Collection in separate tables. `tcg.app.ui` has the Collection list and Printing detail screens; the app opens on the Collection list. Add, CSV export, backup and restore are stubs until their slices land. Debug builds also have a menu entry, "Add sample data (debug)", that fills an empty Collection with sample Owned Copies (`app/src/debug`); release builds don't include it. CameraX and ML Kit text recognition (bundled Latin model) are declared but not used yet.
 
 ## Requirements
 

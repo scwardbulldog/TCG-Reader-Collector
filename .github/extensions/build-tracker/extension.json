@@ -1,0 +1,54 @@
+{
+  "version": 1,
+  "initialization": "module",
+  "canvases": [
+    {
+      "id": "build-tracker",
+      "displayName": "Build Tracker",
+      "description": "Tracks this repo's maps, build parents and tickets from GitHub Issues, with lanes, blockers, a next-up pick and session hand-off.",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "repo": { "type": "string", "description": "Optional owner/name override; defaults to the git origin remote." },
+          "parent": { "type": ["integer", "string"], "description": "Optional parent issue number, or \"inbox\", to show first." }
+        }
+      },
+      "actions": [
+        {
+          "name": "refresh",
+          "description": "Re-fetch issues from GitHub, bypassing the 60 second cache, and return the board state.",
+          "inputSchema": { "type": "object", "additionalProperties": false, "properties": {} }
+        },
+        {
+          "name": "get_state",
+          "description": "Return the current board state (cached up to 60 seconds).",
+          "inputSchema": { "type": "object", "additionalProperties": false, "properties": {} }
+        },
+        {
+          "name": "select_parent",
+          "description": "Show the board for a parent issue number or the Inbox.",
+          "inputSchema": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["parent"],
+            "properties": { "parent": { "type": ["integer", "string"], "description": "Parent issue number or \"inbox\"." } }
+          }
+        },
+        {
+          "name": "start_session",
+          "description": "Hand a ready-for-agent ticket to a new Copilot session (local by default). Does not change labels or assignees.",
+          "inputSchema": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["number"],
+            "properties": {
+              "number": { "type": "integer" },
+              "mode": { "type": "string", "enum": ["local", "cloud"] }
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

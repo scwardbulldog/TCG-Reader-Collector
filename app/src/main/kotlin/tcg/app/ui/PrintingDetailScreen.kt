@@ -13,7 +13,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -28,14 +27,15 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.unit.dp
 import tcg.domain.Condition
 import tcg.domain.Location
@@ -47,8 +47,15 @@ import tcg.domain.onepiece.OnePiece
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PrintingDetailScreen(viewModel: PrintingDetailViewModel, printing: PrintingIdentifier, onBack: () -> Unit) {
-    val state by viewModel.state.collectAsState()
+    LaunchedEffect(printing) { viewModel.show(printing) }
+    val state = viewModel.state
     val entry = state.catalogEntry
+
+    // Deleting the last Owned Copy leaves nothing to show. Reads the view model afresh because
+    // the previous visit's state can still be in the first frame.
+    LaunchedEffect(state.loaded, state.copies.isEmpty()) {
+        if (viewModel.state.loaded && viewModel.state.copies.isEmpty()) onBack()
+    }
 
     Scaffold(
         topBar = {
@@ -73,25 +80,19 @@ fun PrintingDetailScreen(viewModel: PrintingDetailViewModel, printing: PrintingI
                 style = MaterialTheme.typography.bodyMedium,
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
             )
-            if (state.copies.isEmpty()) {
-                Box(Modifier.fillMaxSize().padding(32.dp), contentAlignment = Alignment.Center) {
-                    Text("No Owned Copies of this card.", textAlign = TextAlign.Center)
-                }
-            } else {
-                LazyColumn(
-                    Modifier.fillMaxSize(),
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                    contentPadding = PaddingValues(16.dp),
-                ) {
-                    items(state.copies, key = { it.id.value }) { copy ->
-                        OwnedCopyEditor(
-                            copy = copy,
-                            locations = state.locations,
-                            onSave = viewModel::save,
-                            onDelete = { viewModel.requestDelete(copy.id) },
-                            onCreateLocation = viewModel::createLocation,
-                        )
-                    }
+            LazyColumn(
+                Modifier.fillMaxSize(),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+                contentPadding = PaddingValues(16.dp),
+            ) {
+                items(state.copies, key = { it.id.value }) { copy ->
+                    OwnedCopyEditor(
+                        copy = copy,
+                        locations = state.locations,
+                        onSave = viewModel::save,
+                        onDelete = { viewModel.requestDelete(copy.id) },
+                        onCreateLocation = viewModel::createLocation,
+                    )
                 }
             }
         }
@@ -111,6 +112,7 @@ private fun DeleteConfirmation(viewModel: PrintingDetailViewModel) {
     )
 }
 
+/** Edits save as they are made: Condition and Location on pick, notes when the field loses focus or the screen closes. */
 @Composable
 private fun OwnedCopyEditor(
     copy: OwnedCopy,
@@ -119,40 +121,56 @@ private fun OwnedCopyEditor(
     onDelete: () -> Unit,
     onCreateLocation: (String, (LocationId) -> Unit) -> Unit,
 ) {
-    var condition by remember(copy) { mutableStateOf(copy.condition) }
-    var location by remember(copy) { mutableStateOf(copy.location) }
-    var notes by remember(copy) { mutableStateOf(copy.notes) }
+    val latest by rememberUpdatedState(copy)
+    var condition by remember(copy.id) { mutableStateOf(copy.condition) }
+    var location by remember(copy.id) { mutableStateOf(copy.location) }
+    var notes by remember(copy.id) { mutableStateOf(copy.notes) }
     var newLocationDialog by remember { mutableStateOf(false) }
-    val edited = copy.copy(condition = condition, location = location, notes = notes)
+
+    fun persist() {
+        val edited = latest.copy(condition = condition, location = location, notes = notes)
+        if (edited != latest) onSave(edited)
+    }
+    DisposableEffect(copy.id) { onDispose { persist() } }
 
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Picker(
                     label = "Condition",
                     value = condition.label(),
-                    options = Condition.entries.map { it.label() to { condition = it } },
-                    modifier = Modifier.weight(1f),
+                    options = Condition.entries.map {
+                        it.label() to {
+                            condition = it
+                            persist()
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth(),
                 )
                 Picker(
                     label = "Location",
                     value = locations.firstOrNull { it.id == location }?.name ?: "None",
-                    options = listOf<Pair<String, () -> Unit>>("None" to { location = null }) +
-                        locations.map { it.name to { location = it.id } } +
-                        ("New location…" to { newLocationDialog = true }),
-                    modifier = Modifier.weight(1f),
+                    options = listOf<Pair<String, () -> Unit>>(
+                        "None" to {
+                            location = null
+                            persist()
+                        },
+                    ) + locations.map {
+                        it.name to {
+                            location = it.id
+                            persist()
+                        }
+                    } + ("New location…" to { newLocationDialog = true }),
+                    modifier = Modifier.fillMaxWidth(),
                 )
             }
             OutlinedTextField(
                 value = notes,
                 onValueChange = { notes = it },
                 label = { Text("Notes") },
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth().onFocusChanged { if (!it.isFocused) persist() },
             )
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(onClick = { onSave(edited) }, enabled = edited != copy) { Text("Save") }
-                OutlinedButton(onClick = onDelete) { Text("Delete") }
-            }
+            OutlinedButton(onClick = onDelete) { Text("Delete") }
         }
     }
 
@@ -161,7 +179,10 @@ private fun OwnedCopyEditor(
             onDismiss = { newLocationDialog = false },
             onCreate = { name ->
                 newLocationDialog = false
-                onCreateLocation(name) { location = it }
+                onCreateLocation(name) {
+                    location = it
+                    persist()
+                }
             },
         )
     }

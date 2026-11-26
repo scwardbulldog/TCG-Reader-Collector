@@ -92,7 +92,6 @@ private fun CollectionApp(
     onUpdateCatalog: () -> Unit,
 ) {
     var selected by rememberSaveable(stateSaver = printingSaver) { mutableStateOf<PrintingIdentifier?>(null) }
-    var opened by rememberSaveable { mutableIntStateOf(0) }
     val scope = rememberCoroutineScope()
     val catalog = remember { database.catalogStore() }
     val collection = remember { database.collectionStore() }
@@ -113,21 +112,24 @@ private fun CollectionApp(
                 onBackup = { comingSoon("Backup") },
                 onRestore = { comingSoon("Restore") },
                 onUpdateCatalog = onUpdateCatalog,
+                onSeedSampleData = if (BuildConfig.DEBUG) {
+                    {
+                        scope.launch {
+                            SampleData.seed(catalog, collection)
+                            viewModel.refresh()
+                        }
+                    }
+                } else null,
             ),
             updatingCatalog = updatingCatalog,
             catalogRevision = catalogRevision,
             snackbarHostState = snackbarHostState,
-            onOpen = {
-                opened++
-                selected = it
-            },
+            onOpen = { selected = it },
         )
     } else {
         BackHandler { selected = null }
-        // A fresh key per visit so the detail view model never shows a stale list.
         val viewModel = viewModel<PrintingDetailViewModel>(
-            key = "$current#$opened",
-            initializer = { PrintingDetailViewModel(PrintingDetail(current, collection, catalog)) },
+            initializer = { PrintingDetailViewModel { PrintingDetail(it, collection, catalog) } },
         )
         PrintingDetailScreen(viewModel, current, onBack = { selected = null })
     }

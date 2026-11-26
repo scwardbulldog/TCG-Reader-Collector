@@ -10,9 +10,11 @@ import kotlinx.coroutines.launch
 import tcg.domain.LocationId
 import tcg.domain.OwnedCopy
 import tcg.domain.OwnedCopyId
+import tcg.domain.PrintingIdentifier
 import tcg.domain.collection.CollectionList
 import tcg.domain.collection.CollectionRow
 import tcg.domain.collection.PrintingDetail
+import tcg.domain.collection.PrintingDetailState
 
 class CollectionViewModel(private val list: CollectionList) : ViewModel() {
     var search by mutableStateOf("")
@@ -35,26 +37,46 @@ class CollectionViewModel(private val list: CollectionList) : ViewModel() {
     }
 }
 
-class PrintingDetailViewModel(private val detail: PrintingDetail) : ViewModel() {
-    val state = detail.state
+/**
+ * One instance serves every Printing detail visit: [show] switches it to another Printing, so
+ * visiting many Printings never accumulates view models.
+ */
+class PrintingDetailViewModel(private val detailFor: (PrintingIdentifier) -> PrintingDetail) : ViewModel() {
+    var state by mutableStateOf(PrintingDetailState())
+        private set
 
-    init {
-        viewModelScope.launch { detail.load() }
+    private var detail: PrintingDetail? = null
+    private var showing: Job? = null
+
+    fun show(printing: PrintingIdentifier) {
+        showing?.cancel()
+        val next = detailFor(printing)
+        detail = next
+        state = PrintingDetailState()
+        showing = viewModelScope.launch {
+            next.load()
+            next.state.collect { state = it }
+        }
     }
 
-    fun save(copy: OwnedCopy) {
-        viewModelScope.launch { detail.save(copy) }
+    // Writes go to the Printing that was showing when called, so a save fired while leaving still lands.
+    fun save(copy: OwnedCopy) = launchOn { save(copy) }
+
+    fun requestDelete(id: OwnedCopyId) {
+        detail?.requestDelete(id)
     }
 
-    fun requestDelete(id: OwnedCopyId) = detail.requestDelete(id)
-
-    fun cancelDelete() = detail.cancelDelete()
-
-    fun confirmDelete() {
-        viewModelScope.launch { detail.confirmDelete() }
+    fun cancelDelete() {
+        detail?.cancelDelete()
     }
 
-    fun createLocation(name: String, onCreated: (LocationId) -> Unit) {
-        viewModelScope.launch { onCreated(detail.createLocation(name).id) }
+    fun confirmDelete() = launchOn { confirmDelete() }
+
+    fun createLocation(name: String, onCreated: (LocationId) -> Unit) =
+        launchOn { onCreated(createLocation(name).id) }
+
+    private fun launchOn(block: suspend PrintingDetail.() -> Unit) {
+        val target = detail ?: return
+        viewModelScope.launch { target.block() }
     }
 }

@@ -48,6 +48,8 @@ class CollectionActions(
     val onBackup: () -> Unit,
     val onRestore: () -> Unit,
     val onUpdateCatalog: () -> Unit,
+    /** Debug builds only; null hides the menu entry. */
+    val onSeedSampleData: (() -> Unit)? = null,
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -80,6 +82,9 @@ fun CollectionScreen(
                             onDismiss = { menuOpen = false },
                             onClick = actions.onUpdateCatalog,
                         )
+                        actions.onSeedSampleData?.let {
+                            MenuEntry("Add sample data (debug)", onDismiss = { menuOpen = false }, onClick = it)
+                        }
                     }
                 },
             )
@@ -104,7 +109,7 @@ fun CollectionScreen(
                     else "No cards match your search.",
                 )
                 else -> LazyColumn(Modifier.fillMaxSize()) {
-                    items(rows, key = { it.printing }) { row ->
+                    items(rows, key = { with(it.printing) { "$game/$language/$sourceId" } }) { row ->
                         CollectionRowItem(row, onClick = { onOpen(row.printing) })
                         HorizontalDivider()
                     }

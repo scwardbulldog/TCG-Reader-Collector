@@ -71,6 +71,21 @@ class PrintingDetailTest {
     }
 
     @Test
+    fun `the detail is not loaded until load finishes so an empty list can mean the last copy was deleted`() = runTest {
+        val only = collection.add(NewOwnedCopy(zoro))
+        assertEquals(false, detail.state.value.loaded)
+
+        detail.load()
+        assertEquals(true, detail.state.value.loaded)
+
+        detail.requestDelete(only.id)
+        detail.confirmDelete()
+
+        assertEquals(true, detail.state.value.loaded)
+        assertEquals(emptyList(), detail.state.value.copies)
+    }
+
+    @Test
     fun `cancelling a delete keeps the Owned Copy`() = runTest {
         val copy = collection.add(NewOwnedCopy(zoro))
         detail.load()

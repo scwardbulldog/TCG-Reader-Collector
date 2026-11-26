@@ -12,6 +12,8 @@ import tcg.domain.Printing
 import tcg.domain.PrintingIdentifier
 
 data class PrintingDetailState(
+    /** False until [PrintingDetail.load] finishes, so an empty [copies] can be told apart from "not loaded yet". */
+    val loaded: Boolean = false,
     val catalogEntry: Printing? = null,
     val copies: List<OwnedCopy> = emptyList(),
     val locations: List<Location> = emptyList(),
@@ -30,6 +32,7 @@ class PrintingDetail(
 
     suspend fun load() {
         mutableState.value = PrintingDetailState(
+            loaded = true,
             catalogEntry = catalog.find(printing),
             copies = collection.ownedCopies(printing),
             locations = collection.locations(),
