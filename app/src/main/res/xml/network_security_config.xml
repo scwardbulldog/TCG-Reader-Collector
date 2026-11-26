@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Bandai's image server chains to GlobalSign Root R46, which Android 13 devices don't trust yet.
+     The public root is bundled for that domain only; everything else uses the system trust store. -->
+<network-security-config>
+    <domain-config>
+        <domain includeSubdomains="true">onepiece-cardgame.com</domain>
+        <trust-anchors>
+            <certificates src="system" />
+            <certificates src="@raw/globalsign_root_r46" />
+        </trust-anchors>
+    </domain-config>
+</network-security-config>

@@ -74,6 +74,9 @@ dependencies {
     // Bundled Latin model: runs on-device with no Play Store services.
     implementation("com.google.mlkit:text-recognition:16.0.1")
 
+    // Fetches Printing images from their official URL and caches them on disk; see tcg.app.TcgApplication.
+    implementation("io.coil-kt:coil-compose:2.7.0")
+
     val room = "2.6.1"
     implementation("androidx.room:room-runtime:$room")
     implementation("androidx.room:room-ktx:$room")

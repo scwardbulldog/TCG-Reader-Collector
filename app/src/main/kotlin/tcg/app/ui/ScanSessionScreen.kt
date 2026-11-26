@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
@@ -34,6 +35,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
@@ -220,13 +222,20 @@ private fun ConfirmationForm(viewModel: ScanViewModel, confirmation: Confirmatio
 /** Alternate Arts differ by artwork, so the row shows the Release Product and rarity that tell them apart. */
 @Composable
 private fun PrintingRow(printing: Printing, modifier: Modifier = Modifier) {
-    Column(modifier.fillMaxWidth().padding(12.dp)) {
-        Text(printing.name, style = MaterialTheme.typography.titleMedium)
-        val variant = OnePiece.variantOf(printing.identifier.sourceId).label()
-        Text(
-            listOf(printing.baseNumber, variant, printing.rarity, printing.releaseProduct)
-                .filter { it.isNotBlank() }.joinToString(" · "),
-            style = MaterialTheme.typography.bodyMedium,
-        )
+    Row(
+        modifier.fillMaxWidth().padding(12.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        PrintingImage(printing.imageUrl, Modifier.width(64.dp))
+        Column(Modifier.weight(1f)) {
+            Text(printing.name, style = MaterialTheme.typography.titleMedium)
+            val variant = OnePiece.variantOf(printing.identifier.sourceId).label()
+            Text(
+                listOf(printing.baseNumber, variant, printing.rarity, printing.releaseProduct)
+                    .filter { it.isNotBlank() }.joinToString(" · "),
+                style = MaterialTheme.typography.bodyMedium,
+            )
+        }
     }
 }
