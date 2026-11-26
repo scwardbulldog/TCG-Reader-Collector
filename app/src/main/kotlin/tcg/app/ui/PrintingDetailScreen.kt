@@ -36,6 +36,7 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import tcg.domain.Condition
 import tcg.domain.Location
@@ -198,7 +199,7 @@ internal fun Picker(label: String, value: String, options: List<Pair<String, () 
     var open by remember { mutableStateOf(false) }
     Box(modifier) {
         OutlinedButton(onClick = { open = true }, modifier = Modifier.fillMaxWidth()) {
-            Text("$label: $value", maxLines = 1)
+            Text("$label: $value", maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
         DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
             options.forEach { (text, onPick) ->
