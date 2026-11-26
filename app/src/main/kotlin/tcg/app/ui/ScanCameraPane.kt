@@ -59,7 +59,13 @@ private const val RESIZE_SETTLE_MILLIS = 300L
  */
 @OptIn(FlowPreview::class)
 @Composable
-fun ScanCameraPane(scope: ScanScope, onRead: (BaseNumberRead) -> Unit, modifier: Modifier = Modifier) {
+fun ScanCameraPane(
+    scope: ScanScope,
+    onRead: (BaseNumberRead) -> Unit,
+    modifier: Modifier = Modifier,
+    /** False while something covers the camera; the torch is then off, and comes back with the toggle when visible again. */
+    visible: Boolean = true,
+) {
     val context = LocalContext.current
     var granted by remember {
         mutableStateOf(ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED)
@@ -82,7 +88,7 @@ fun ScanCameraPane(scope: ScanScope, onRead: (BaseNumberRead) -> Unit, modifier:
         previewView?.let { CameraXCardScanner(context, lifecycleOwner, it) }
     }
 
-    LaunchedEffect(scanner, torchOn) { scanner?.setTorch(torchOn) }
+    LaunchedEffect(scanner, torchOn, visible) { scanner?.setTorch(torchOn && visible) }
     // The view port is fixed at bind time, so rebinding on a size change keeps the analysed region equal to the drawn outline.
     var previewSize by remember { mutableStateOf(IntSize.Zero) }
     LaunchedEffect(scanner, scope) {

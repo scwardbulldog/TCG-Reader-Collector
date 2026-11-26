@@ -71,7 +71,7 @@ fun ScanSessionScreen(viewModel: ScanViewModel, onClose: () -> Unit) {
             when {
                 sessionInput == null -> SetupForm(viewModel)
                 else -> Box(Modifier.fillMaxSize()) {
-                    // The camera stays bound beneath the confirmation, so the torch and the cooldown carry over to the next card.
+                    // The camera stays bound beneath the confirmation, so the cooldown carries over to the next card; the torch goes off meanwhile and comes back with it.
                     InputForm(viewModel)
                     if (confirmation != null) {
                         Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).pointerInput(Unit) {}) {
@@ -137,7 +137,12 @@ private fun InputForm(viewModel: ScanViewModel) {
     Column(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         viewModel.lastAdded?.let { Text(it, color = MaterialTheme.colorScheme.primary) }
         if (scope != null && result !is ScanInputResult.SearchResults) {
-            ScanCameraPane(scope, onRead = viewModel::onRead, modifier = Modifier.weight(1f).fillMaxWidth())
+            ScanCameraPane(
+                scope,
+                onRead = viewModel::onRead,
+                modifier = Modifier.weight(1f).fillMaxWidth(),
+                visible = viewModel.confirmation == null,
+            )
         }
         OutlinedTextField(
             value = viewModel.query,
