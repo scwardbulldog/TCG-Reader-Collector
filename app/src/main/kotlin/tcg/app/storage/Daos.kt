@@ -64,6 +64,12 @@ interface CollectionDao {
     @Query("SELECT game, language, sourceId, COUNT(*) AS ownedCopyCount FROM owned_copy GROUP BY game, language, sourceId")
     suspend fun countsByPrinting(): List<PrintingCount>
 
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertKnownPrintings(printings: List<KnownPrintingEntity>)
+
+    @Query("SELECT * FROM known_printing WHERE game = :game AND language = :language AND sourceId = :sourceId")
+    suspend fun knownPrinting(game: Game, language: Language, sourceId: String): KnownPrintingEntity?
+
     @Insert
     suspend fun insertLocation(location: LocationEntity): Long
 

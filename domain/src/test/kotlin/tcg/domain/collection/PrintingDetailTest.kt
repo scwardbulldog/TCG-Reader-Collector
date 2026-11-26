@@ -32,7 +32,7 @@ class PrintingDetailTest {
         detail.load()
 
         val state = detail.state.value
-        assertEquals(entry, state.catalogEntry)
+        assertEquals(entry, state.details)
         assertEquals(listOf(first, second), state.copies)
         assertEquals(listOf(binder), state.locations)
     }

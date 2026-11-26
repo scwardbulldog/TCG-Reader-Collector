@@ -13,12 +13,14 @@ import tcg.domain.onepiece.OnePiece
 /** One Collection list row: a Printing and how many Owned Copies of it exist. */
 data class CollectionRow(
     val printing: PrintingIdentifier,
-    /** Null for an Unresolved Printing, which the Catalog has no record of. */
-    val catalogEntry: Printing?,
+    /** The Catalog's details, or the last-known ones when [noLongerInCatalog]; null for an Unresolved Printing. */
+    val details: Printing?,
     val ownedCopyCount: Int,
+    /** A Catalog refresh dropped this Printing, so [details] are the last-known ones. */
+    val noLongerInCatalog: Boolean = false,
 ) {
-    val baseNumber: String? get() = catalogEntry?.baseNumber?.takeIf { it.isNotBlank() }
-    val name: String? get() = catalogEntry?.name
+    val baseNumber: String? get() = details?.baseNumber?.takeIf { it.isNotBlank() }
+    val name: String? get() = details?.name
 }
 
 /** Narrows the Collection list; every set field must match (AND), and unset fields match everything. */
@@ -32,17 +34,19 @@ data class CollectionFilter(
 }
 
 /** The Collection grouped by Printing, with search, filters and the default display order. */
-class CollectionList(private val collection: CollectionStore, private val catalog: CatalogStore) {
+class CollectionList(private val collection: CollectionStore, catalog: CatalogStore) {
+    private val printings = LastKnownPrintings(collection, catalog)
+
     suspend fun rows(search: String = "", filter: CollectionFilter = CollectionFilter()): List<CollectionRow> =
         collection.countsByPrinting()
             .mapNotNull { (printing, count) -> row(printing, count, filter) }
             .filter { it.matches(search.trim()) }
             .sortedWith(displayOrder)
 
-    /** The Release Products of every owned Printing the Catalog knows, for choosing a filter. */
+    /** The Release Products of every owned Printing whose details are known, for choosing a filter. */
     suspend fun releaseProducts(): List<String> =
         collection.countsByPrinting().keys
-            .mapNotNull { catalog.find(it)?.releaseProduct?.takeIf(String::isNotBlank) }
+            .mapNotNull { printings.resolve(it)?.printing?.releaseProduct?.takeIf(String::isNotBlank) }
             .distinct()
             .sorted()
 
@@ -50,19 +54,20 @@ class CollectionList(private val collection: CollectionStore, private val catalo
     suspend fun locations(): List<Location> = collection.locations()
 
     private suspend fun row(printing: PrintingIdentifier, count: Int, filter: CollectionFilter): CollectionRow? {
-        val entry = catalog.find(printing)
+        val entry = printings.resolve(printing)
+        val details = entry?.printing
         if (filter.language != null && printing.language != filter.language) return null
-        if (filter.releaseProduct != null && entry?.releaseProduct != filter.releaseProduct) return null
-        if (filter.variant != null && (entry == null || OnePiece.variantOf(printing.sourceId) != filter.variant)) return null
+        if (filter.releaseProduct != null && details?.releaseProduct != filter.releaseProduct) return null
+        if (filter.variant != null && (details == null || OnePiece.variantOf(printing.sourceId) != filter.variant)) return null
         val copies = if (filter.location == null) count else collection.ownedCopies(printing).count { it.location == filter.location }
-        return if (copies == 0) null else CollectionRow(printing, entry, copies)
+        return if (copies == 0) null else CollectionRow(printing, details, copies, entry?.noLongerInCatalog ?: false)
     }
 
     private fun CollectionRow.matches(query: String): Boolean = when {
         query.isEmpty() -> true
-        catalogEntry == null -> printing.sourceId.contains(query, ignoreCase = true)
-        else -> catalogEntry.baseNumber.contains(query, ignoreCase = true) ||
-            catalogEntry.name.contains(query, ignoreCase = true)
+        details == null -> printing.sourceId.contains(query, ignoreCase = true)
+        else -> details.baseNumber.contains(query, ignoreCase = true) ||
+            details.name.contains(query, ignoreCase = true)
     }
 
     private companion object {

@@ -16,13 +16,15 @@ sealed interface CatalogUpdateResult {
 }
 
 /**
- * Downloads each Catalog file and imports it into the [CatalogStore]. It only sees the Catalog, so a
- * refresh can never touch the Collection.
+ * Downloads each Catalog file and imports it into the [CatalogStore]. It never touches Owned Copies: the only
+ * Collection access is [beforeReplace], which runs just before a target's Catalog is replaced so the Collection
+ * can keep the details of Printings the new file may drop. If it fails, the old Catalog stays.
  */
 class CatalogUpdater(
     private val source: CatalogSource,
     private val store: CatalogStore,
     private val targets: List<CatalogTarget> = DEFAULT_TARGETS,
+    private val beforeReplace: suspend (CatalogTarget) -> Unit = {},
 ) {
     /** Checks every target. A failure on one leaves its previous Catalog in place and doesn't stop the others. */
     suspend fun update(): Map<CatalogTarget, CatalogUpdateResult> =
@@ -42,6 +44,7 @@ class CatalogUpdater(
             CatalogFetch.UpToDate -> CatalogUpdateResult.UpToDate
             is CatalogFetch.Fetched -> {
                 val printings = CatalogFile.parse(target, fetch.content)
+                beforeReplace(target)
                 store.replaceCatalog(target.game, target.language, printings, fetch.version)
                 CatalogUpdateResult.Updated(printings.size)
             }

@@ -187,17 +187,18 @@ private fun EmptyState(message: String) {
 
 @Composable
 private fun CollectionRowItem(row: CollectionRow, onClick: () -> Unit) {
-    val variant = row.catalogEntry?.let { OnePiece.variantOf(row.printing.sourceId).label() }
+    val variant = row.details?.let { OnePiece.variantOf(row.printing.sourceId).label() }
     Row(
         Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 12.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        PrintingImage(row.catalogEntry?.imageUrl, Modifier.width(48.dp))
+        PrintingImage(row.details?.imageUrl, Modifier.width(48.dp))
         Column(Modifier.weight(1f)) {
             Text(row.name ?: row.printing.sourceId, style = MaterialTheme.typography.titleMedium)
             val details = listOfNotNull(row.baseNumber, row.printing.language.label(), variant)
             Text(details.joinToString(" · "), style = MaterialTheme.typography.bodyMedium)
+            if (row.noLongerInCatalog) NoLongerInCatalogFlag()
         }
         Text("×${row.ownedCopyCount}", style = MaterialTheme.typography.titleLarge)
     }

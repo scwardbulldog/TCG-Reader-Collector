@@ -50,6 +50,31 @@ class CatalogAndCollectionStorageTest {
     }
 
     @Test
+    fun last_known_printing_details_survive_a_catalog_refresh_that_drops_the_printing() = runTest {
+        val zoro = PrintingIdentifier(Game.OnePiece, Language.English, "OP01-001_p1")
+        catalog.replaceCatalog(Game.OnePiece, Language.English, listOf(printing(zoro)))
+        val saved = catalog.find(zoro)!!
+
+        collection.rememberPrintings(listOf(saved))
+        catalog.replaceCatalog(Game.OnePiece, Language.English, emptyList())
+
+        assertNull(catalog.find(zoro))
+        assertEquals(saved, collection.lastKnownPrinting(zoro))
+        assertNull(collection.lastKnownPrinting(PrintingIdentifier(Game.OnePiece, Language.English, "OP99-999")))
+    }
+
+    @Test
+    fun remembering_a_printing_again_replaces_its_saved_details() = runTest {
+        val zoro = PrintingIdentifier(Game.OnePiece, Language.English, "OP01-001_p1")
+        val original = printing(zoro)
+
+        collection.rememberPrintings(listOf(original))
+        collection.rememberPrintings(listOf(original.copy(name = "Renamed")))
+
+        assertEquals("Renamed", collection.lastKnownPrinting(zoro)?.name)
+    }
+
+    @Test
     fun an_owned_copy_can_reference_a_printing_absent_from_the_catalog() = runTest {
         val unknown = PrintingIdentifier(Game.OnePiece, Language.Japanese, "OP99-999")
 

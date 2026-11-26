@@ -41,6 +41,12 @@ interface CollectionStore {
     /** How many Owned Copies each Printing has. */
     suspend fun countsByPrinting(): Map<PrintingIdentifier, Int>
 
+    /** Saves the details of Printings Owned Copies refer to, replacing earlier ones, so they outlive a Catalog refresh. */
+    suspend fun rememberPrintings(printings: List<Printing>)
+
+    /** The details last saved by [rememberPrintings]; null if none were. */
+    suspend fun lastKnownPrinting(identifier: PrintingIdentifier): Printing?
+
     suspend fun createLocation(name: String): Location
 
     suspend fun locations(): List<Location>

@@ -7,6 +7,7 @@ import tcg.domain.LocationId
 import tcg.domain.NewOwnedCopy
 import tcg.domain.OwnedCopy
 import tcg.domain.OwnedCopyId
+import tcg.domain.Printing
 import tcg.domain.PrintingIdentifier
 
 class RoomCollectionStore(private val dao: CollectionDao) : CollectionStore {
@@ -51,6 +52,12 @@ class RoomCollectionStore(private val dao: CollectionDao) : CollectionStore {
     override suspend fun countsByPrinting(): Map<PrintingIdentifier, Int> =
         dao.countsByPrinting().associate { PrintingIdentifier(it.game, it.language, it.sourceId) to it.ownedCopyCount }
 
+    override suspend fun rememberPrintings(printings: List<Printing>) =
+        dao.upsertKnownPrintings(printings.map { it.toKnownEntity() })
+
+    override suspend fun lastKnownPrinting(identifier: PrintingIdentifier): Printing? =
+        dao.knownPrinting(identifier.game, identifier.language, identifier.sourceId)?.toDomain()
+
     override suspend fun createLocation(name: String): Location =
         Location(LocationId(dao.insertLocation(LocationEntity(name = name))), name)
 
@@ -63,6 +70,26 @@ class RoomCollectionStore(private val dao: CollectionDao) : CollectionStore {
     override suspend fun deleteLocation(id: LocationId): DeleteLocationResult =
         if (dao.deleteLocationIfEmpty(id.value)) DeleteLocationResult.Deleted else DeleteLocationResult.NotEmpty
 }
+
+private fun Printing.toKnownEntity() = KnownPrintingEntity(
+    game = identifier.game,
+    language = identifier.language,
+    sourceId = identifier.sourceId,
+    baseNumber = baseNumber,
+    releaseProduct = releaseProduct,
+    rarity = rarity,
+    name = name,
+    imageUrl = imageUrl,
+)
+
+private fun KnownPrintingEntity.toDomain() = Printing(
+    identifier = PrintingIdentifier(game, language, sourceId),
+    baseNumber = baseNumber,
+    releaseProduct = releaseProduct,
+    rarity = rarity,
+    name = name,
+    imageUrl = imageUrl,
+)
 
 private fun OwnedCopyEntity.toDomain() = OwnedCopy(
     id = OwnedCopyId(id),

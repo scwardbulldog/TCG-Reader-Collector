@@ -10,8 +10,11 @@ import tcg.domain.CatalogStore
 import tcg.domain.CollectionStore
 
 @Database(
-    entities = [CatalogPrintingEntity::class, CatalogVersionEntity::class, LocationEntity::class, OwnedCopyEntity::class],
-    version = 2,
+    entities = [
+        CatalogPrintingEntity::class, CatalogVersionEntity::class, LocationEntity::class, OwnedCopyEntity::class,
+        KnownPrintingEntity::class,
+    ],
+    version = 3,
     exportSchema = true,
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -32,9 +35,21 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        /** Adds the last-known Printing table; leaves the Collection and Catalog rows as they are. */
+        val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `known_printing` (`game` TEXT NOT NULL, `language` TEXT NOT NULL, " +
+                        "`sourceId` TEXT NOT NULL, `baseNumber` TEXT NOT NULL, `releaseProduct` TEXT NOT NULL, " +
+                        "`rarity` TEXT NOT NULL, `name` TEXT NOT NULL, `imageUrl` TEXT NOT NULL, " +
+                        "PRIMARY KEY(`game`, `language`, `sourceId`))",
+                )
+            }
+        }
+
         fun open(context: Context): AppDatabase =
             Room.databaseBuilder(context, AppDatabase::class.java, "tcg.db")
-                .addMigrations(MIGRATION_1_2)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
                 .build()
 
         fun inMemory(context: Context): AppDatabase =

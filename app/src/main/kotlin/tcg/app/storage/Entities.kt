@@ -40,6 +40,22 @@ data class LocationEntity(
 )
 
 /**
+ * Last-known details of each Printing an Owned Copy refers to, kept with the Collection so they survive a
+ * Catalog refresh that drops the Printing. Like [OwnedCopyEntity], no foreign key into the Catalog.
+ */
+@Entity(tableName = "known_printing", primaryKeys = ["game", "language", "sourceId"])
+data class KnownPrintingEntity(
+    val game: Game,
+    val language: Language,
+    val sourceId: String,
+    val baseNumber: String,
+    val releaseProduct: String,
+    val rarity: String,
+    val name: String,
+    val imageUrl: String,
+)
+
+/**
  * Collection table. The Printing is a plain (game, language, sourceId) reference with no foreign key
  * into the Catalog, so a Catalog refresh can never alter or block an Owned Copy.
  */

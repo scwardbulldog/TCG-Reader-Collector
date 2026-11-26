@@ -7,11 +7,13 @@ import tcg.domain.LocationId
 import tcg.domain.NewOwnedCopy
 import tcg.domain.OwnedCopy
 import tcg.domain.OwnedCopyId
+import tcg.domain.Printing
 import tcg.domain.PrintingIdentifier
 
 class InMemoryCollectionStore : CollectionStore {
     private val copies = mutableListOf<OwnedCopy>()
     private val locations = mutableListOf<Location>()
+    private val lastKnown = mutableMapOf<PrintingIdentifier, Printing>()
     private var nextId = 1L
 
     override suspend fun add(copy: NewOwnedCopy): OwnedCopy =
@@ -33,6 +35,12 @@ class InMemoryCollectionStore : CollectionStore {
 
     override suspend fun countsByPrinting(): Map<PrintingIdentifier, Int> =
         copies.groupingBy { it.printing }.eachCount()
+
+    override suspend fun rememberPrintings(printings: List<Printing>) {
+        printings.forEach { lastKnown[it.identifier] = it }
+    }
+
+    override suspend fun lastKnownPrinting(identifier: PrintingIdentifier): Printing? = lastKnown[identifier]
 
     override suspend fun createLocation(name: String): Location =
         Location(LocationId(nextId++), name).also(locations::add)

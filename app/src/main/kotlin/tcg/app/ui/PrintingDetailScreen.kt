@@ -56,7 +56,7 @@ fun PrintingDetailScreen(
 ) {
     LaunchedEffect(printing) { viewModel.show(printing, locationFilter) }
     val state = viewModel.state
-    val entry = state.catalogEntry
+    val entry = state.details
 
     // Deleting the last Owned Copy leaves nothing to show. Reads the view model afresh because
     // the previous visit's state can still be in the first frame.
@@ -87,7 +87,10 @@ fun PrintingDetailScreen(
                 horizontalArrangement = Arrangement.spacedBy(16.dp),
             ) {
                 PrintingImage(entry?.imageUrl, Modifier.width(120.dp))
-                Text(header.joinToString(" · "), style = MaterialTheme.typography.bodyMedium)
+                Column {
+                    Text(header.joinToString(" · "), style = MaterialTheme.typography.bodyMedium)
+                    if (state.noLongerInCatalog) NoLongerInCatalogFlag()
+                }
             }
             LazyColumn(
                 Modifier.fillMaxSize(),

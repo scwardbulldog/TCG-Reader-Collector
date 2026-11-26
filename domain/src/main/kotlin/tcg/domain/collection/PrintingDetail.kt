@@ -15,7 +15,9 @@ import tcg.domain.PrintingIdentifier
 data class PrintingDetailState(
     /** False until [PrintingDetail.load] finishes, so an empty [copies] can be told apart from "not loaded yet". */
     val loaded: Boolean = false,
-    val catalogEntry: Printing? = null,
+    /** The Catalog's details, or the last-known ones when [noLongerInCatalog]; null for an Unresolved Printing. */
+    val details: Printing? = null,
+    val noLongerInCatalog: Boolean = false,
     val copies: List<OwnedCopy> = emptyList(),
     val locations: List<Location> = emptyList(),
     /** The Owned Copy awaiting delete confirmation; nothing is deleted until [PrintingDetail.confirmDelete]. */
@@ -33,15 +35,18 @@ class PrintingDetail(
     private val location: LocationId? = null,
 ) {
     private val mutableState = MutableStateFlow(PrintingDetailState())
+    private val printings = LastKnownPrintings(collection, catalog)
     val state: StateFlow<PrintingDetailState> = mutableState.asStateFlow()
     private var shown: Set<OwnedCopyId> = emptySet()
 
     suspend fun load() {
         val copies = collection.ownedCopies(printing).filter { location == null || it.location == location }
         shown = copies.map { it.id }.toSet()
+        val entry = printings.resolve(printing)
         mutableState.value = PrintingDetailState(
             loaded = true,
-            catalogEntry = catalog.find(printing),
+            details = entry?.printing,
+            noLongerInCatalog = entry?.noLongerInCatalog ?: false,
             copies = copies,
             locations = collection.locations(),
         )

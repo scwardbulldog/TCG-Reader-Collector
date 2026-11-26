@@ -33,6 +33,7 @@ import tcg.domain.Language
 import tcg.domain.PrintingIdentifier
 import tcg.domain.catalog.CatalogUpdater
 import tcg.domain.collection.CollectionList
+import tcg.domain.collection.LastKnownPrintings
 import tcg.domain.collection.PrintingDetail
 
 class MainActivity : ComponentActivity() {
@@ -46,6 +47,7 @@ class MainActivity : ComponentActivity() {
         CatalogUpdater(
             source = GitHubCatalogSource(BuildConfig.CATALOG_REPO, BuildConfig.CATALOG_TOKEN),
             store = database.catalogStore(),
+            beforeReplace = LastKnownPrintings(database.collectionStore(), database.catalogStore())::remember,
         )
     }
 

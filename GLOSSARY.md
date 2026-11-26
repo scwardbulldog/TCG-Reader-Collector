@@ -27,6 +27,10 @@ _Avoid_: Card ID, SKU
 A **Printing** that an **Owned Copy** refers to by **Printing identifier** only, because the **Catalog** has no record of it (e.g. after a restore).
 _Avoid_: Orphan, missing card
 
+**No longer in the Catalog**:
+The flag on a **Printing** whose **Owned Copies** remain after a **Catalog** refresh dropped it. Its last-known details are kept and shown; unlike an **Unresolved Printing**, the app once had its details.
+_Avoid_: Deleted, removed, orphan
+
 **Base Number**:
 The number printed on a card within a **Game**, e.g. OP01-001 in One Piece. In One Piece, the **Printings** of the same card share a Base Number across **Variants** and **Languages**.
 _Avoid_: Card ID, set number
