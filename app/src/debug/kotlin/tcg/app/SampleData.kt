@@ -11,28 +11,41 @@ import tcg.domain.PrintingIdentifier
 
 /** Debug-only sample Collection, for trying the UI before scanning and the Catalog download are usable. */
 object SampleData {
-    private fun printing(language: Language, sourceId: String, name: String, rarity: String = "L") =
-        Printing(
-            identifier = PrintingIdentifier(Game.OnePiece, language, sourceId),
-            baseNumber = sourceId.substringBefore('_'),
-            releaseProduct = "Romance Dawn",
-            rarity = rarity,
-            name = name,
-            imageUrl = "",
-        )
+    private const val ROMANCE_DAWN = "Romance Dawn"
+    private const val PREMIUM_BOOSTER = "Premium Booster -The Best-"
+    private const val PARAMOUNT_WAR = "Paramount War"
+
+    private fun printing(
+        language: Language,
+        sourceId: String,
+        name: String,
+        rarity: String = "L",
+        releaseProduct: String = ROMANCE_DAWN,
+    ) = Printing(
+        identifier = PrintingIdentifier(Game.OnePiece, language, sourceId),
+        baseNumber = sourceId.substringBefore('_'),
+        releaseProduct = releaseProduct,
+        rarity = rarity,
+        name = name,
+        imageUrl = "",
+    )
 
     private val sampleCatalog = mapOf(
         Language.English to listOf(
             printing(Language.English, "OP01-001", "Roronoa Zoro"),
             printing(Language.English, "OP01-001_p1", "Roronoa Zoro"),
-            printing(Language.English, "OP01-001_r1", "Roronoa Zoro"),
+            printing(Language.English, "OP02-013_r1", "Portgas.D.Ace", "SR", PREMIUM_BOOSTER),
             printing(Language.English, "OP01-016", "Nami", "R"),
-            printing(Language.English, "OP02-013", "Portgas.D.Ace", "SR"),
+            printing(Language.English, "OP02-013", "Portgas.D.Ace", "SR", PARAMOUNT_WAR),
         ),
         Language.Japanese to listOf(printing(Language.Japanese, "OP01-001", "ロロノア・ゾロ")),
     )
 
-    /** Does nothing unless the Collection is empty. A Language's sample Catalog is added only if it has none. */
+    /**
+     * Does nothing unless the Collection is empty. A Language's sample Catalog is added only if it has none.
+     * Spreads copies over Locations so every filter has something to match: three Zoro copies are split
+     * two in Binder 1 and one in Bulk box A, and some copies have no Location.
+     */
     suspend fun seed(catalog: CatalogStore, collection: CollectionStore) {
         if (collection.countsByPrinting().isNotEmpty()) return
         sampleCatalog.forEach { (language, printings) ->
@@ -40,24 +53,31 @@ object SampleData {
                 catalog.replaceCatalog(Game.OnePiece, language, printings)
             }
         }
-        val binder = collection.createLocation("Binder 3")
+        val binder = collection.createLocation("Binder 1").id
+        val bulk = collection.createLocation("Bulk box A").id
+        fun id(language: Language, sourceId: String) = PrintingIdentifier(Game.OnePiece, language, sourceId)
+        val en = Language.English
         val copies = listOf(
-            "OP01-001" to 3, "OP01-001_p1" to 1, "OP01-001_r1" to 2, "OP01-016" to 1, "OP02-013" to 2,
+            id(en, "OP01-001") to listOf(binder, binder, bulk),
+            id(en, "OP01-001_p1") to listOf(binder),
+            id(en, "OP02-013_r1") to listOf(bulk, null),
+            id(en, "OP01-016") to listOf(null),
+            id(en, "OP02-013") to listOf(binder, null),
+            id(Language.Japanese, "OP01-001") to listOf(bulk, null),
+            // A Printing the Catalog doesn't know, to see an Unresolved Printing row.
+            id(en, "ST99-007_p2") to listOf(binder),
         )
-        for ((sourceId, count) in copies) {
-            repeat(count) { index ->
+        for ((printing, locations) in copies) {
+            locations.forEachIndexed { index, location ->
                 collection.add(
                     NewOwnedCopy(
-                        PrintingIdentifier(Game.OnePiece, Language.English, sourceId),
+                        printing,
                         condition = if (index == 0) Condition.NearMint else Condition.LightlyPlayed,
-                        location = binder.id.takeIf { index == 0 },
+                        location = location,
                         notes = if (index == 1) "corner wear" else "",
                     ),
                 )
             }
         }
-        repeat(2) { collection.add(NewOwnedCopy(PrintingIdentifier(Game.OnePiece, Language.Japanese, "OP01-001"))) }
-        // A Printing the Catalog doesn't know, to see an Unresolved Printing row.
-        collection.add(NewOwnedCopy(PrintingIdentifier(Game.OnePiece, Language.English, "ST99-007_p2")))
     }
 }
