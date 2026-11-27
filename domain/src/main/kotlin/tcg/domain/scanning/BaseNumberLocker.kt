@@ -14,6 +14,9 @@ class BaseNumberLocker(
     private var lastReadAt: Long? = null
     private var ignored: String? = null
 
+    /** The votes counted so far, for diagnostics; a lock clears them. */
+    fun currentVotes(): Map<String, Int> = votes.toMap()
+
     /** Returns the Base Number if this read locks it, else null. */
     fun read(baseNumber: String, atMillis: Long): String? {
         val last = lastReadAt

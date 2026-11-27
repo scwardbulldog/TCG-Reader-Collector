@@ -47,7 +47,7 @@ The Catalog and the Collection are stored apart: a Catalog refresh never touches
 | `tcg.app` | `MainActivity` (wiring, file pickers, Catalog refresh trigger), `TcgApplication` (image loader) |
 | `tcg.app.storage` | Room database, DAOs, entities, the Room store implementations |
 | `tcg.app.catalog` | `GitHubCatalogSource`: ETag-based download from the private Catalog repo |
-| `tcg.app.scanning` | CameraX + ML Kit scanner, photo cache, Language preference |
+| `tcg.app.scanning` | CameraX + ML Kit scanner, photo cache, Language preference, `ScanDebugLog` (debug builds only) |
 | `tcg.app.ui` | Compose screens and the view models behind them |
 
 ## How a scan becomes an Owned Copy
@@ -56,6 +56,8 @@ The Catalog and the Collection are stored apart: a Catalog refresh never touches
 2. `ScanSessionInput.lookup` finds candidate Printings for the Base Number in the session's current Language, from the Catalog and the Collection's Custom Printings. One match is preselected, never added without a tap.
 3. The collector confirms (count, condition, Location). `ScanSessionInput.add` writes all copies through `CollectionStore.addAll`, atomically, and remembers the Location for the next add.
 4. In Bulk Add, photos are read in the background by `BulkCapture` via `PhotoSource`, merged into `Batch` rows (resolved, ambiguous, failed), and nothing reaches the Collection until "Add all".
+
+In debug builds, `ScanDebugLog` records the live scan's last few outline crops with their OCR text and parsed Base Number whenever a number locks or text is read but no Base Number is found. Records are app-private under `files/scan-debug/` (newest 30 kept, wiped at start-up); pull them with `adb exec-out run-as tcg.app tar -c -C files scan-debug`. Release builds have no log.
 
 Today the state that ties this together (the open confirmation, Language switching, discard prompts, Bulk Add mode) lives in `ScanViewModel`, not in `domain`.
 

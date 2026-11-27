@@ -19,6 +19,17 @@ class BaseNumberLockerTest {
     }
 
     @Test
+    fun `current votes show the count per number and clear on a lock`() {
+        val locker = BaseNumberLocker()
+
+        locker.feed("OP01-001" to 0, "OP01-081" to 100, "OP01-001" to 200)
+        assertEquals(mapOf("OP01-001" to 2, "OP01-081" to 1), locker.currentVotes())
+
+        locker.read("OP01-001", 300)
+        assertEquals(emptyMap(), locker.currentVotes())
+    }
+
+    @Test
     fun `the vote count is the one configured constant by default`() {
         assertEquals(3, BaseNumberLocker.DEFAULT_VOTES)
         val locker = BaseNumberLocker(votesRequired = 2)

@@ -49,6 +49,7 @@ class CameraXCardScanner(
     private val context: Context,
     private val lifecycleOwner: LifecycleOwner,
     private val previewView: PreviewView,
+    private val debugLog: ScanDebugLog? = null,
 ) : CardScanner {
     private var camera: Camera? = null
     private var imageCapture: ImageCapture? = null
@@ -57,6 +58,7 @@ class CameraXCardScanner(
     /** Applied now if the camera is bound, and again on every later bind. */
     fun setTorch(enabled: Boolean) {
         torchOn = enabled
+        debugLog?.note("torch", enabled)
         camera?.cameraControl?.enableTorch(enabled)
     }
 
@@ -67,6 +69,9 @@ class CameraXCardScanner(
         val provider = cameraProvider()
         val viewPort = awaitViewPort()
         val preview = newPreview()
+        debugLog?.note("game", scope.game.name)
+        debugLog?.note("torch", torchOn)
+        debugLog?.note("analysisSize", "${ANALYSIS_SIZE.width}x${ANALYSIS_SIZE.height}")
         val analysis = ImageAnalysis.Builder()
             .setResolutionSelector(
                 ResolutionSelector.Builder()
@@ -84,14 +89,22 @@ class CameraXCardScanner(
         val mainExecutor = ContextCompat.getMainExecutor(context)
         val recognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
         analysis.setAnalyzer(executor) { proxy ->
-            val image = runCatching { outlineImage(proxy) }.getOrNull()
-            if (image == null) {
+            val frame = runCatching { outlineImage(proxy) }.getOrNull()
+            if (frame == null) {
                 proxy.close()
                 return@setAnalyzer
             }
-            recognizer.process(image)
+            recognizer.process(InputImage.fromBitmap(frame.bitmap, frame.rotation))
                 .addOnSuccessListener(mainExecutor) { text ->
-                    text.lowestBaseNumber(extract)?.let { trySend(BaseNumberRead(it)) }
+                    val read = text.lowestBaseNumber(extract)
+                    debugLog?.frame(
+                        frame.bitmap,
+                        frame.rotation,
+                        text.text,
+                        text.textBlocks.flatMap { it.lines }.map { ScanDebugLog.Line(it.text, it.boundingBox?.bottom) },
+                        read,
+                    )
+                    read?.let { trySend(BaseNumberRead(it)) }
                 }
                 .addOnCompleteListener(mainExecutor) { proxy.close() }
         }
@@ -192,16 +205,18 @@ class CameraXCardScanner(
         }, ContextCompat.getMainExecutor(context))
     }
 
-    /** The part of [proxy] inside [CardOutline], upright for ML Kit; null if the frame has no usable area. */
-    private fun outlineImage(proxy: ImageProxy): InputImage? {
+    /** The part of [proxy] inside [CardOutline], as ML Kit reads it; null if the frame has no usable area. */
+    private fun outlineImage(proxy: ImageProxy): OutlineFrame? {
         val rotation = proxy.imageInfo.rotationDegrees
         val region = outlineInBuffer(proxy.cropRect, rotation) ?: return null
         val bitmap = proxy.toBitmap()
         val clipped = Rect(region).apply { intersect(0, 0, bitmap.width, bitmap.height) }
         if (clipped.width() < MIN_REGION_PX || clipped.height() < MIN_REGION_PX) return null
-        val cropped = Bitmap.createBitmap(bitmap, clipped.left, clipped.top, clipped.width(), clipped.height())
-        return InputImage.fromBitmap(cropped, rotation)
+        return OutlineFrame(Bitmap.createBitmap(bitmap, clipped.left, clipped.top, clipped.width(), clipped.height()), rotation)
     }
+
+    /** An outline crop in buffer orientation; ML Kit and the debug log rotate it by [rotation] to upright. */
+    private class OutlineFrame(val bitmap: Bitmap, val rotation: Int)
 
     private companion object {
         const val VIEW_PORT_POLL_MILLIS = 50L

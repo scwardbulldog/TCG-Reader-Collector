@@ -55,6 +55,7 @@ import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.filter
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import tcg.app.scanning.CameraXCardScanner
+import tcg.app.TcgApplication
 import tcg.app.scanning.CardOutline
 import tcg.domain.scanning.BaseNumberRead
 import tcg.domain.scanning.ScanScope
@@ -106,7 +107,7 @@ fun ScanCameraPane(
     var previewView by remember { mutableStateOf<PreviewView?>(null) }
     var torchOn by remember { mutableStateOf(false) }
     val scanner = remember(previewView) {
-        previewView?.let { CameraXCardScanner(context, lifecycleOwner, it) }
+        previewView?.let { CameraXCardScanner(context, lifecycleOwner, it, (context.applicationContext as TcgApplication).scanDebugLog) }
     }
 
     LaunchedEffect(scanner, torchOn, visible) { scanner?.setTorch(torchOn && visible) }

@@ -10,6 +10,7 @@ import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import tcg.app.scanning.CachePhotoSource
+import tcg.app.scanning.ScanDebugLog
 import tcg.domain.CatalogStore
 import tcg.domain.CollectionStore
 import tcg.domain.Condition
@@ -60,6 +61,7 @@ class ScanViewModel(
     private val collection: CollectionStore,
     private val photos: CachePhotoSource,
     private val languages: LanguageStore,
+    private val debugLog: ScanDebugLog? = null,
     private val clock: () -> Long = SystemClock::elapsedRealtime,
 ) : ViewModel() {
     private var locker = BaseNumberLocker()
@@ -333,7 +335,13 @@ class ScanViewModel(
      */
     fun onRead(read: BaseNumberRead) {
         if (confirmation != null) return
-        query = locker.read(read.baseNumber, clock()) ?: return
+        debugLog?.note("language", language.name)
+        debugLog?.note("votesRequired", BaseNumberLocker.DEFAULT_VOTES)
+        debugLog?.note("clearGapMillis", BaseNumberLocker.DEFAULT_CLEAR_GAP_MILLIS)
+        val votesBefore = locker.currentVotes()
+        val locked = locker.read(read.baseNumber, clock()) ?: return
+        debugLog?.onLock(locked, votesBefore + (locked to (votesBefore[locked] ?: 0) + 1))
+        query = locked
     }
 
     private fun show(lookup: ScanLookup) {

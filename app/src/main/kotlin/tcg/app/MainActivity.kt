@@ -208,9 +208,10 @@ private fun CollectionApp(
 
     val photos = remember { CachePhotoSource(context.applicationContext) }
     val languages = remember { SharedPreferencesLanguageStore(context) }
+    val debugLog = (context.applicationContext as TcgApplication).scanDebugLog
 
     if (scanning) {
-        val scanViewModel = viewModel<ScanViewModel>(initializer = { ScanViewModel(catalog, collection, photos, languages) })
+        val scanViewModel = viewModel<ScanViewModel>(initializer = { ScanViewModel(catalog, collection, photos, languages, debugLog) })
         val close = {
             if (scanViewModel.requestEnd()) scanning = false
         }
