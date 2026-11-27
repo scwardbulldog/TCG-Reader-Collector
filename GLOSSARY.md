@@ -69,4 +69,12 @@ _Avoid_: Storage, container, bin
 
 **Scan Session**:
 A run of consecutive scans for one **Game**. It has a current **Language** that the collector can change mid-session.
-_Avoid_: Batch, import
+_Avoid_: Import
+
+**Bulk Add**:
+The **Scan Session** mode where the collector snaps one photo per card and reviews them all once at the end, instead of confirming each scan. Nothing is added until "Add all".
+_Avoid_: Batch scan, import
+
+**Batch**:
+One **Bulk Add** run's set of snapped cards, shown as review rows. It is discarded unless "Add all" is tapped.
+_Avoid_: Scan Session (that is the whole run of scans), import
