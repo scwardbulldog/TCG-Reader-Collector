@@ -73,7 +73,6 @@ The set, pack, or other product associated with a specific **Printing**'s releas
 **Product code**:
 Bandai's short code for a **Release Product**, e.g. OP-01. Promos and other products may have none.
 _Avoid_: Set number, Base Number
-_Avoid_: Set number
 
 **Owned Copy**:
 One physical card the collector holds, tied to exactly one **Printing**, with its own condition, **Location**, and notes; how many of a Printing are owned is the count of its Owned Copies.
