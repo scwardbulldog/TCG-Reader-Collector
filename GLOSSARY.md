@@ -19,6 +19,10 @@ _Avoid_: Card database, card list, set list
 What all **Printings** sharing a **Game** and **Base Number** have in common, across **Languages** and **Variants**. It has no record of its own: it exists wherever at least one **Printing** does, including a **Custom Printing**.
 _Avoid_: Card ID, Card number (that is the **Base Number**)
 
+**Card name**:
+What a **Card** is called in a **Language**, read from that Language's **Printings** (Normal preferred). Never an identifier. A Card with no **Printing** in a Language has no name in it, so a JP-only Card has only its Japanese name.
+_Avoid_: Translation (no name is machine-translated), Printing label (that is a **Custom Printing**'s own text)
+
 **Printing**:
 One specific printed version of a **Card** within a **Game** and **Language**, as listed in the **Catalog**; several Printings can share one **Base Number**.
 _Avoid_: Card (that is the level above), SKU
