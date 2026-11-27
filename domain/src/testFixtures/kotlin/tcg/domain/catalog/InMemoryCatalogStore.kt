@@ -6,6 +6,7 @@ import tcg.domain.Game
 import tcg.domain.Language
 import tcg.domain.Printing
 import tcg.domain.PrintingIdentifier
+import tcg.domain.containsFolded
 
 /** [collection], when given, is where Owned Copies are read from to decide which dropped Printings a refresh keeps. */
 class InMemoryCatalogStore(private val collection: CollectionStore? = null) : CatalogStore {
@@ -29,9 +30,7 @@ class InMemoryCatalogStore(private val collection: CollectionStore? = null) : Ca
         current(game, language).filter { it.baseNumber == baseNumber }
 
     override suspend fun search(game: Game, language: Language, query: String): List<Printing> =
-        current(game, language).filter {
-            it.baseNumber.contains(query, ignoreCase = true) || it.name.contains(query, ignoreCase = true)
-        }
+        current(game, language).filter { it.baseNumber.containsFolded(query) || it.name.containsFolded(query) }
 
     private fun current(game: Game, language: Language) =
         printings[CatalogTarget(game, language)].orEmpty().filter { !it.noLongerInCatalog }

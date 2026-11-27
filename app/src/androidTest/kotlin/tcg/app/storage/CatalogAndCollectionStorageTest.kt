@@ -178,16 +178,17 @@ class CatalogAndCollectionStorageTest {
     }
 
     @Test
-    fun search_matches_base_number_or_name_in_one_language_and_treats_wildcards_literally() = runTest {
+    fun search_matches_base_number_or_name_in_one_language_ignoring_case_and_width() = runTest {
         val en = PrintingIdentifier(Game.OnePiece, Language.English, "OP01-001")
         val jp = PrintingIdentifier(Game.OnePiece, Language.Japanese, "OP01-001")
         catalog.replaceCatalog(Game.OnePiece, Language.English, listOf(printing(en).copy(name = "Zoro")))
-        catalog.replaceCatalog(Game.OnePiece, Language.Japanese, listOf(printing(jp).copy(name = "Zoro")))
+        catalog.replaceCatalog(Game.OnePiece, Language.Japanese, listOf(printing(jp).copy(name = "Ｄ・ゾロ＆ロー")))
 
         assertEquals(listOf(en), catalog.search(Game.OnePiece, Language.English, "zor").map { it.identifier })
         assertEquals(listOf(en), catalog.search(Game.OnePiece, Language.English, "op01-0").map { it.identifier })
         assertEquals(emptyList(), catalog.search(Game.OnePiece, Language.English, "%"))
         assertEquals(emptyList(), catalog.search(Game.OnePiece, Language.English, "OP01_001"))
+        assertEquals(listOf(jp), catalog.search(Game.OnePiece, Language.Japanese, "d・ゾロ&").map { it.identifier })
     }
 
     @Test

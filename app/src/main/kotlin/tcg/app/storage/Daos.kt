@@ -50,11 +50,9 @@ interface CatalogDao {
     )
     suspend fun findByBaseNumber(game: Game, language: Language, baseNumber: String): List<PrintingEntity>
 
-    @Query(
-        "SELECT * FROM printing WHERE game = :game AND language = :language AND origin = 'Catalog' AND noLongerInCatalog = 0 AND " +
-            "(baseNumber LIKE '%' || :pattern || '%' ESCAPE '\\' OR name LIKE '%' || :pattern || '%' ESCAPE '\\')",
-    )
-    suspend fun search(game: Game, language: Language, pattern: String): List<PrintingEntity>
+    /** Every row [RoomCatalogStore.search] looks through: the Catalog rows of one Language that are still listed. */
+    @Query("SELECT * FROM printing WHERE game = :game AND language = :language AND origin = 'Catalog' AND noLongerInCatalog = 0")
+    suspend fun searchable(game: Game, language: Language): List<PrintingEntity>
 }
 
 @Dao

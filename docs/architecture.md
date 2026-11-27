@@ -2,8 +2,6 @@
 
 A map of how the code is organised, for someone about to change it. Vocabulary is in [GLOSSARY.md](../GLOSSARY.md); behaviour is in the specs ([v1](spec/v1.md), [v2](spec/v2.md)); the reasons behind big choices are in [docs/adr/](adr/). This page does not repeat them.
 
-Parts that v2 is changing are marked **v2** and point at the spec rather than describing today's code.
-
 ## Two modules
 
 | Module | Holds | Rule |
@@ -29,6 +27,8 @@ Each interface below is defined in `domain` and implemented in `app`; tests use 
 
 The Catalog and the Collection are stored apart: a Catalog refresh never touches the Collection's Owned Copies or Locations ([ADR 0003](adr/0003-phone-only-storage-no-backend.md)). Catalog and Custom Printings share one `printing` table, told apart by `origin`. A refresh is a single transaction in `CatalogDao.replaceAll`, planned by the pure `CatalogRefresh`: a dropped Printing that an Owned Copy uses is kept and flagged **No longer in the Catalog**, an unused one is deleted, a listed one takes the new details and clears the flag, and Custom rows are never touched. Room migration 4 to 5 builds the table from `known_printing` ([v2 spec](spec/v2.md) sections 4 and 5, [ADR 0004](adr/0004-v2-card-model-derived-card-bandai-authoritative.md)).
 
+Search matches a Base Number or name ignoring case and full-width/half-width forms (`containsFolded`); `RoomCatalogStore.search` folds in Kotlin over one Language's rows rather than keeping folded text in the table.
+
 ## Packages in `domain`
 
 | Package | Responsibility |
@@ -36,7 +36,7 @@ The Catalog and the Collection are stored apart: a Catalog refresh never touches
 | `tcg.domain` | Printing (with its published Variant, Product code and Treatments), Printing identifier, Variant, Owned Copy, Location, and the store interfaces |
 | `tcg.domain.onepiece` | One Piece rules: Base Number recognition in OCR text |
 | `tcg.domain.catalog` | Parsing a Catalog file (`schemaVersion` 2 only), `CatalogUpdater`, and `CatalogRefresh` (the refresh rules; format: [catalog-format.md](catalog-format.md)) |
-| `tcg.domain.collection` | Collection list and filters, Printing detail, Custom Printings, `PrintingResolver` (Catalog or Custom row for an Owned Copy), CSV export |
+| `tcg.domain.collection` | Collection list and filters, Printing detail, Custom Printings, `Cards` and `Card` (derived from the Printings; Card names; name search in both Languages with the full-width fold), `PrintingResolver` (Catalog or Custom row for an Owned Copy), CSV export |
 | `tcg.domain.scanning` | Scan Session, lookup and manual search, `BaseNumberLocker`, Bulk Add (`Batch`, `BulkCapture`) |
 | `tcg.domain.backup` | The versioned JSON backup format, validation, atomic restore, reminders |
 
@@ -66,6 +66,7 @@ Today the state that ties this together (the open confirmation, Language switchi
 | Change | Start in |
 | --- | --- |
 | A scan or search rule | `domain/.../scanning/ScanSessionInput.kt` |
+| Card grouping, Card names or name matching | `domain/.../collection/Card.kt`, `domain/.../SearchText.kt` |
 | Bulk Add merging or review rows | `domain/.../scanning/Batch.kt`, `BulkCapture.kt` |
 | What the Collection list shows | `domain/.../collection/CollectionList.kt` |
 | Backup or restore | `domain/.../backup/` (file reading and writing is in `MainActivity`) |
@@ -74,4 +75,4 @@ Today the state that ties this together (the open confirmation, Language switchi
 
 ## Keeping this page true
 
-Update it in the same commit as the change that makes it wrong; the definition of done in [verification.md](agents/verification.md) says so. After the v2 storage and Card-model slices (E and G in the [v2 spec](spec/v2.md) section 10), remove the **v2** markers and describe the result.
+Update it in the same commit as the change that makes it wrong; the definition of done in [verification.md](agents/verification.md) says so.

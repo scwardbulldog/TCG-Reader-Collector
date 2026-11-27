@@ -21,7 +21,10 @@ interface CatalogStore {
     /** Base Number is a lookup aid, so several Printings (Variants) can match. Flagged rows are not offered. */
     suspend fun findByBaseNumber(game: Game, language: Language, baseNumber: String): List<Printing>
 
-    /** Printings of one Game and Language whose Base Number or name contains [query], ignoring case. Flagged rows are not offered. */
+    /**
+     * Printings of one Game and Language whose Base Number or name contains [query], ignoring case and
+     * full-width/half-width forms (see [containsFolded]). Flagged rows are not offered.
+     */
     suspend fun search(game: Game, language: Language, query: String): List<Printing>
 }
 

@@ -5,6 +5,7 @@ import tcg.domain.Game
 import tcg.domain.Language
 import tcg.domain.Printing
 import tcg.domain.PrintingIdentifier
+import tcg.domain.containsFolded
 
 class RoomCatalogStore(private val dao: CatalogDao) : CatalogStore {
     override suspend fun replaceCatalog(game: Game, language: Language, printings: List<Printing>, version: String?) {
@@ -19,6 +20,9 @@ class RoomCatalogStore(private val dao: CatalogDao) : CatalogStore {
     override suspend fun findByBaseNumber(game: Game, language: Language, baseNumber: String): List<Printing> =
         dao.findByBaseNumber(game, language, baseNumber).map { it.toDomain() }
 
+    /** SQL `LIKE` cannot fold full-width forms, so one Language's rows (a few thousand) are filtered here. */
     override suspend fun search(game: Game, language: Language, query: String): List<Printing> =
-        dao.search(game, language, query.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")).map { it.toDomain() }
+        dao.searchable(game, language)
+            .filter { it.baseNumber.containsFolded(query) || it.name.containsFolded(query) }
+            .map { it.toDomain() }
 }
