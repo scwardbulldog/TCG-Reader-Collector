@@ -167,7 +167,7 @@ fun ScanCameraPane(
             }
         }
         Text(
-            if (bulk != null) "Snap each card inside the outline. Cards are read in the background."
+            if (bulk != null) "Snap each card inside the outline; cards are read in the background. Turn the torch on for sharper reads."
             else "Fit the card in the outline. Tilt it slightly if the number is lost in glare.",
             style = MaterialTheme.typography.bodySmall,
         )
