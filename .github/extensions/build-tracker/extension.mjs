@@ -87,7 +87,7 @@ async function startSession(entry, { number, mode = 'local' }) {
   const title = clean(found.title);
   const prompt = mode === 'cloud'
     ? `Create a cloud coding session for issue #${number} in "${repo}" ("${title}"). Use create_session with execution_location "cloud". Tell the cloud agent to read the issue, GLOSSARY.md and relevant ADRs, implement it per the acceptance criteria, run the existing validation, and report the resulting PR. Do not edit labels or assignees.`
-    : `Start a new local Copilot session in this repository to implement issue #${number} in "${repo}" ("${title}"). Have it read the issue with gh issue view ${number} --repo ${repo}, then GLOSSARY.md and relevant ADRs, and implement it per the acceptance criteria. Do not edit labels or assignees.`;
+    : `Call create_session now with relationship "independent", workspace "${REPO_ROOT.replace(/\\/g, '/')}", worktree false, title "Implement #${number}: ${title}", and prompt exactly "/mattpocock-skills:implement #${number}". Do not add anything else to the prompt, and do not implement the issue in this session.`;
   await sessionRef.send(prompt);
   return { ok: true, message: `Requested a ${mode} session for #${number}.` };
 }
