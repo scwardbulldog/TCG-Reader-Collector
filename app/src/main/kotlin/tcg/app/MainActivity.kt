@@ -18,6 +18,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
@@ -28,6 +29,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import tcg.app.catalog.GitHubCatalogSource
 import tcg.app.catalog.summary
+import tcg.app.scanning.CachePhotoSource
 import tcg.app.storage.AppDatabase
 import tcg.app.ui.BackupViewModel
 import tcg.app.ui.CollectionActions
@@ -203,12 +205,14 @@ private fun CollectionApp(
     val scope = rememberCoroutineScope()
     val catalog = remember { database.catalogStore() }
     val collection = remember { database.collectionStore() }
+    val context = LocalContext.current
+
+    val photos = remember { CachePhotoSource(context.applicationContext) }
 
     if (scanning) {
-        val scanViewModel = viewModel<ScanViewModel>(initializer = { ScanViewModel(catalog, collection) })
+        val scanViewModel = viewModel<ScanViewModel>(initializer = { ScanViewModel(catalog, collection, photos) })
         val close = {
-            scanViewModel.endSession()
-            scanning = false
+            if (scanViewModel.requestEnd()) scanning = false
         }
         BackHandler(onBack = close)
         ScanSessionScreen(scanViewModel, onClose = close)

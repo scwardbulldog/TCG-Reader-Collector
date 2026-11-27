@@ -6,7 +6,9 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
+import tcg.app.scanning.CachePhotoSource
 import tcg.domain.CatalogStore
 import tcg.domain.CollectionStore
 import tcg.domain.Condition
@@ -15,12 +17,25 @@ import tcg.domain.Location
 import tcg.domain.Printing
 import tcg.domain.scanning.BaseNumberLocker
 import tcg.domain.scanning.BaseNumberRead
+import tcg.domain.scanning.Batch
+import tcg.domain.scanning.BulkCapture
+import tcg.domain.scanning.BulkStatus
+import tcg.domain.scanning.PhotoId
 import tcg.domain.scanning.ScanSessionInput
 import tcg.domain.scanning.ScanLookup
 import tcg.domain.scanning.ScanSetup
+import java.io.File
 
 /** The Printings offered for one lookup, with the collector's pick, copy count and one-off condition. */
 data class Confirmation(val candidates: List<Printing>, val selected: Printing?, val count: Int = 1, val condition: Condition? = null)
+
+/** Single confirms each scan; Bulk snaps a stack of cards and reviews them once. */
+enum class ScanMode { Single, Bulk }
+
+/** A "Discard N unsaved cards?" question; [then] is what the collector was doing when it came up. */
+data class PendingDiscard(val then: Then, val cards: Int) {
+    enum class Then { SwitchToSingle, Leave }
+}
 
 /** What the input screen is showing after the last lookup or search. */
 sealed interface ScanInputResult {
@@ -32,9 +47,12 @@ sealed interface ScanInputResult {
 class ScanViewModel(
     private val catalog: CatalogStore,
     private val collection: CollectionStore,
+    private val photos: CachePhotoSource,
     private val clock: () -> Long = SystemClock::elapsedRealtime,
 ) : ViewModel() {
     private var locker = BaseNumberLocker()
+    private var bulk: BulkCapture? = null
+    private var bulkStatusJob: Job? = null
 
     var setup by mutableStateOf(ScanSetup())
         private set
@@ -43,6 +61,16 @@ class ScanViewModel(
 
     /** Non-null once the collector has started a session; null means the setup screen. */
     var sessionInput by mutableStateOf<ScanSessionInput?>(null)
+        private set
+    var mode by mutableStateOf(ScanMode.Single)
+        private set
+
+    /** Bulk Add progress; all zero in Single mode. */
+    var bulkStatus by mutableStateOf(BulkStatus())
+        private set
+
+    /** Set while "Discard N unsaved cards?" waits for the collector's answer. */
+    var pendingDiscard by mutableStateOf<PendingDiscard?>(null)
         private set
     var query by mutableStateOf("")
         private set
@@ -87,12 +115,86 @@ class ScanViewModel(
         lastAdded = null
     }
 
+    /**
+     * Asks to leave the session. True means it ended; false means unsaved Bulk Add cards need the
+     * collector's answer first (see [pendingDiscard]).
+     */
+    fun requestEnd(): Boolean {
+        if (bulkStatus.snapped > 0) {
+            pendingDiscard = PendingDiscard(PendingDiscard.Then.Leave, bulkStatus.snapped)
+            return false
+        }
+        endSession()
+        return true
+    }
+
     /** Ends the session; a different Language means a new session, so setup keeps nothing of Language. */
     fun endSession() {
+        closeBulk()
+        mode = ScanMode.Single
         sessionInput = null
         setup = setup.copy(language = null)
         clearInput()
     }
+
+    fun selectMode(selected: ScanMode) {
+        val input = sessionInput ?: return
+        if (selected == mode) return
+        when (selected) {
+            ScanMode.Bulk -> {
+                val capture = BulkCapture(Batch(input), photos, viewModelScope)
+                bulk = capture
+                bulkStatusJob = viewModelScope.launch { capture.status.collect { bulkStatus = it } }
+                mode = ScanMode.Bulk
+            }
+            ScanMode.Single -> {
+                if (bulkStatus.snapped > 0) {
+                    pendingDiscard = PendingDiscard(PendingDiscard.Then.SwitchToSingle, bulkStatus.snapped)
+                } else {
+                    leaveBulk()
+                }
+            }
+        }
+    }
+
+    /** Throws the batch away. True if the collector was leaving the session, so the caller should close the screen. */
+    fun confirmDiscard(): Boolean {
+        val pending = pendingDiscard ?: return false
+        pendingDiscard = null
+        leaveBulk()
+        return pending.then == PendingDiscard.Then.Leave
+    }
+
+    fun keepBatch() {
+        pendingDiscard = null
+    }
+
+    /** Where the camera should write the next Bulk Add photo. */
+    fun newPhoto(): Pair<PhotoId, File> = photos.newPhoto()
+
+    fun onPhotoSaved(photo: PhotoId) {
+        val capture = bulk
+        if (capture == null) photos.release(photo) else capture.snap(photo)
+    }
+
+    fun onPhotoFailed(photo: PhotoId) = photos.release(photo)
+
+    private fun leaveBulk() {
+        closeBulk()
+        mode = ScanMode.Single
+    }
+
+    private fun closeBulk() {
+        bulkStatusJob?.cancel()
+        bulkStatusJob = null
+        bulk?.close()
+        bulk = null
+        photos.dropThumbnails()
+        bulkStatus = BulkStatus()
+        pendingDiscard = null
+    }
+
+    override fun onCleared() = closeBulk()
 
     fun onQueryChanged(text: String) {
         query = text

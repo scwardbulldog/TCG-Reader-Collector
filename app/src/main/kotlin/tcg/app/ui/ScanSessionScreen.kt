@@ -14,6 +14,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -67,6 +68,15 @@ fun ScanSessionScreen(viewModel: ScanViewModel, onClose: () -> Unit) {
             )
         },
     ) { padding ->
+        viewModel.pendingDiscard?.let { pending ->
+            AlertDialog(
+                onDismissRequest = viewModel::keepBatch,
+                title = { Text("Discard ${pending.cards} unsaved ${if (pending.cards == 1) "card" else "cards"}?") },
+                text = { Text("Snapped cards are only added once you tap Add all. Leaving throws them away.") },
+                confirmButton = { TextButton(onClick = { if (viewModel.confirmDiscard()) onClose() }) { Text("Discard") } },
+                dismissButton = { TextButton(onClick = viewModel::keepBatch) { Text("Keep snapping") } },
+            )
+        }
         Column(Modifier.fillMaxSize().padding(padding)) {
             when {
                 sessionInput == null -> SetupForm(viewModel)
@@ -134,15 +144,41 @@ private fun SetupForm(viewModel: ScanViewModel) {
 private fun InputForm(viewModel: ScanViewModel) {
     val result = viewModel.result
     val scope = viewModel.sessionInput?.session?.scope
+    val bulkMode = viewModel.mode == ScanMode.Bulk
     Column(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            ScanMode.entries.forEach {
+                FilterChip(
+                    selected = viewModel.mode == it,
+                    onClick = { viewModel.selectMode(it) },
+                    label = { Text(it.name) },
+                )
+            }
+        }
         viewModel.lastAdded?.let { Text(it, color = MaterialTheme.colorScheme.primary) }
-        if (scope != null && result !is ScanInputResult.SearchResults) {
+        if (scope != null && (bulkMode || result !is ScanInputResult.SearchResults)) {
             ScanCameraPane(
                 scope,
                 onRead = viewModel::onRead,
                 modifier = Modifier.weight(1f).fillMaxWidth(),
                 visible = viewModel.confirmation == null,
+                bulk = if (bulkMode) {
+                    BulkShutter(
+                        newPhoto = viewModel::newPhoto,
+                        onSaved = viewModel::onPhotoSaved,
+                        onFailed = viewModel::onPhotoFailed,
+                        snapped = viewModel.bulkStatus.snapped,
+                    )
+                } else null,
             )
+        }
+        if (bulkMode) {
+            val status = viewModel.bulkStatus
+            Text(
+                "${status.snapped} snapped · ${status.read} read · ${status.needsAttention} needs attention",
+                style = MaterialTheme.typography.bodyLarge,
+            )
+            return@Column
         }
         OutlinedTextField(
             value = viewModel.query,

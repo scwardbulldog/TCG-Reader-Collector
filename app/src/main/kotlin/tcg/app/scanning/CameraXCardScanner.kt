@@ -6,9 +6,12 @@ import android.graphics.Rect
 import androidx.camera.core.Camera
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageAnalysis
+import androidx.camera.core.ImageCapture
+import androidx.camera.core.ImageCaptureException
 import androidx.camera.core.ImageProxy
 import androidx.camera.core.Preview
 import androidx.camera.core.UseCaseGroup
+import androidx.camera.core.ViewPort
 import androidx.camera.core.resolutionselector.AspectRatioStrategy
 import androidx.camera.core.resolutionselector.ResolutionSelector
 import androidx.camera.core.resolutionselector.ResolutionStrategy
@@ -20,6 +23,7 @@ import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.text.TextRecognition
 import com.google.mlkit.vision.text.latin.TextRecognizerOptions
 import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
@@ -29,6 +33,7 @@ import tcg.domain.onepiece.OnePiece
 import tcg.domain.scanning.BaseNumberRead
 import tcg.domain.scanning.CardScanner
 import tcg.domain.scanning.ScanScope
+import java.io.File
 import java.util.concurrent.Executors
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
@@ -46,6 +51,7 @@ class CameraXCardScanner(
     private val previewView: PreviewView,
 ) : CardScanner {
     private var camera: Camera? = null
+    private var imageCapture: ImageCapture? = null
     private var torchOn = false
 
     /** Applied now if the camera is bound, and again on every later bind. */
@@ -59,21 +65,12 @@ class CameraXCardScanner(
             Game.OnePiece -> OnePiece::baseNumberIn
         }
         val provider = cameraProvider()
-        var viewPort = previewView.viewPort
-        while (viewPort == null) {
-            delay(VIEW_PORT_POLL_MILLIS)
-            viewPort = previewView.viewPort
-        }
-
-        val aspect = AspectRatioStrategy.RATIO_16_9_FALLBACK_AUTO_STRATEGY
-        val preview = Preview.Builder()
-            .setResolutionSelector(ResolutionSelector.Builder().setAspectRatioStrategy(aspect).build())
-            .build()
-            .also { it.surfaceProvider = previewView.surfaceProvider }
+        val viewPort = awaitViewPort()
+        val preview = newPreview()
         val analysis = ImageAnalysis.Builder()
             .setResolutionSelector(
                 ResolutionSelector.Builder()
-                    .setAspectRatioStrategy(aspect)
+                    .setAspectRatioStrategy(ASPECT)
                     .setResolutionStrategy(
                         ResolutionStrategy(ANALYSIS_SIZE, ResolutionStrategy.FALLBACK_RULE_CLOSEST_HIGHER_THEN_LOWER),
                     ).build(),
@@ -94,11 +91,7 @@ class CameraXCardScanner(
             }
             recognizer.process(image)
                 .addOnSuccessListener(mainExecutor) { text ->
-                    // The Base Number is printed at the bottom of the card, so prefer the lowest match.
-                    text.textBlocks.flatMap { it.lines }
-                        .mapNotNull { line -> extract(line.text)?.let { it to (line.boundingBox?.bottom ?: 0) } }
-                        .maxByOrNull { it.second }
-                        ?.let { trySend(BaseNumberRead(it.first)) }
+                    text.lowestBaseNumber(extract)?.let { trySend(BaseNumberRead(it)) }
                 }
                 .addOnCompleteListener(mainExecutor) { proxy.close() }
         }
@@ -127,6 +120,67 @@ class CameraXCardScanner(
         awaitClose { release() }
     }
 
+    /**
+     * Photo mode for Bulk Add: the preview plus a still-image capture, with nothing read live. Suspends,
+     * with the camera bound, until cancelled. [takePhoto] works only meanwhile.
+     */
+    suspend fun runPhotoMode() {
+        val provider = cameraProvider()
+        val viewPort = awaitViewPort()
+        val preview = newPreview()
+        val capture = ImageCapture.Builder()
+            .setCaptureMode(ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY)
+            .setResolutionSelector(
+                ResolutionSelector.Builder()
+                    .setAspectRatioStrategy(ASPECT)
+                    .setResolutionStrategy(ResolutionStrategy(PHOTO_SIZE, ResolutionStrategy.FALLBACK_RULE_CLOSEST_HIGHER_THEN_LOWER))
+                    .build(),
+            )
+            .build()
+        try {
+            provider.unbindAll()
+            camera = provider.bindToLifecycle(
+                lifecycleOwner,
+                CameraSelector.DEFAULT_BACK_CAMERA,
+                UseCaseGroup.Builder().setViewPort(viewPort).addUseCase(preview).addUseCase(capture).build(),
+            )
+            camera?.cameraControl?.enableTorch(torchOn)
+            imageCapture = capture
+            awaitCancellation()
+        } finally {
+            imageCapture = null
+            provider.unbind(preview, capture)
+            camera = null
+        }
+    }
+
+    /** Saves a full-size photo to [file]. Never blocks: CameraX queues taps made while an earlier photo is still saving. */
+    fun takePhoto(file: File, onSaved: () -> Unit, onFailed: () -> Unit) {
+        val capture = imageCapture ?: return onFailed()
+        capture.takePicture(
+            ImageCapture.OutputFileOptions.Builder(file).build(),
+            ContextCompat.getMainExecutor(context),
+            object : ImageCapture.OnImageSavedCallback {
+                override fun onImageSaved(output: ImageCapture.OutputFileResults) = onSaved()
+                override fun onError(exception: ImageCaptureException) = onFailed()
+            },
+        )
+    }
+
+    private suspend fun awaitViewPort(): ViewPort {
+        var viewPort = previewView.viewPort
+        while (viewPort == null) {
+            delay(VIEW_PORT_POLL_MILLIS)
+            viewPort = previewView.viewPort
+        }
+        return viewPort
+    }
+
+    private fun newPreview(): Preview = Preview.Builder()
+        .setResolutionSelector(ResolutionSelector.Builder().setAspectRatioStrategy(ASPECT).build())
+        .build()
+        .also { it.surfaceProvider = previewView.surfaceProvider }
+
     private suspend fun cameraProvider(): ProcessCameraProvider = suspendCancellableCoroutine { continuation ->
         val future = ProcessCameraProvider.getInstance(context)
         future.addListener({
@@ -153,6 +207,8 @@ class CameraXCardScanner(
         const val VIEW_PORT_POLL_MILLIS = 50L
         const val MIN_REGION_PX = 32
         val ANALYSIS_SIZE = android.util.Size(1920, 1080)
+        val PHOTO_SIZE = android.util.Size(2560, 1440)
+        val ASPECT = AspectRatioStrategy.RATIO_16_9_FALLBACK_AUTO_STRATEGY
     }
 }
 

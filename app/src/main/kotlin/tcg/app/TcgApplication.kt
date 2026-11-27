@@ -5,10 +5,16 @@ import coil.ImageLoader
 import coil.ImageLoaderFactory
 import coil.disk.DiskCache
 import coil.memory.MemoryCache
+import tcg.app.scanning.CachePhotoSource
 import tcg.app.storage.AppDatabase
 
 class TcgApplication : Application(), ImageLoaderFactory {
     val database: AppDatabase by lazy { AppDatabase.open(this) }
+
+    override fun onCreate() {
+        super.onCreate()
+        CachePhotoSource.sweep(this)
+    }
 
     // Printing images are fetched on first view only (no prefetch) and then served from this disk cache.
     // Bandai's responses may forbid caching, so cache headers are ignored: the cache is the only copy
