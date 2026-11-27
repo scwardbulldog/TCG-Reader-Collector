@@ -246,6 +246,7 @@ private fun InputForm(viewModel: ScanViewModel) {
 @Composable
 private fun ConfirmationForm(viewModel: ScanViewModel, confirmation: Confirmation) {
     val session = viewModel.sessionInput?.session ?: return
+    var customDialog by remember { mutableStateOf(false) }
     Column(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text(
             if (confirmation.candidates.size == 1) "Check this is your card, then tap Add."
@@ -263,6 +264,19 @@ private fun ConfirmationForm(viewModel: ScanViewModel, confirmation: Confirmatio
                     ),
                 ) { PrintingRow(printing) }
             }
+        }
+        TextButton(onClick = { customDialog = true }) { Text("Not listed? Create custom Printing") }
+        if (customDialog) {
+            CustomPrintingDialog(
+                title = "New custom Printing",
+                language = session.language.label(),
+                baseNumber = confirmation.candidates.first().baseNumber,
+                onDismiss = { customDialog = false },
+                onSave = { number, label ->
+                    customDialog = false
+                    viewModel.createCustomPrinting(number, label)
+                },
+            )
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedButton(onClick = { viewModel.setCount(confirmation.count - 1) }) { Text("−") }

@@ -307,14 +307,21 @@ class ScanViewModel(
     /** Gives up on a no-match: nothing is added. */
     fun skip() = clearInput()
 
-    /** Creates a Custom Printing for a no-match and proposes it for confirmation like any other Printing. */
+    /**
+     * Creates a Custom Printing, for a no-match or when none of the proposed Printings is the collector's,
+     * and offers it for confirmation next to the Printings already proposed.
+     */
     fun createCustomPrinting(baseNumber: String, label: String) {
         val current = sessionInput ?: return
+        val previous = justCreated
+        val proposed = confirmation?.candidates.orEmpty().filter { it.identifier != previous?.identifier }
+        discardUnusedCustomPrinting()
         viewModelScope.launch {
             val printing = current.createCustomPrinting(baseNumber, label)
             justCreated = printing
             result = ScanInputResult.None
-            confirmation = Confirmation(listOf(printing), selected = printing)
+            confirmation = confirmation?.copy(candidates = proposed + printing, selected = printing)
+                ?: Confirmation(listOf(printing), selected = printing)
         }
     }
 
@@ -354,7 +361,7 @@ class ScanViewModel(
         val printing = pending.selected ?: return
         viewModelScope.launch {
             val added = current.add(printing, pending.count, pending.condition ?: current.session.defaultCondition)
-            justCreated = null
+            if (justCreated?.identifier == printing.identifier) justCreated = null else discardUnusedCustomPrinting()
             lastAdded = "Added ${added.size} × ${printing.name} (${printing.baseNumber})"
             clearInput()
         }
