@@ -36,8 +36,12 @@ A **Printing** that an **Owned Copy** refers to by **Printing identifier** only,
 _Avoid_: Orphan, missing card
 
 **Custom Printing**:
-A **Printing** the collector recorded themselves because the **Catalog** has none for a card they hold, with the **Base Number**, **Language** and a free-text label they chose. It is part of the **Collection**, not the **Catalog**; unlike an **Unresolved Printing**, its details are the collector's own.
+A **Printing** the collector recorded themselves because the **Catalog** has none for a card they hold, with the **Base Number**, **Language** and a free-text label they chose, and optionally a **Card photo**. It is part of the **Collection**, not the **Catalog**; unlike an **Unresolved Printing**, its details are the collector's own.
 _Avoid_: Manual card, homebrew, user-added card
+
+**Card photo**:
+The collector's own picture of a physical card, kept on a **Custom Printing** so it has an image when the **Catalog** has none. A **Catalog** Printing never has one; its image comes from the **Catalog**.
+_Avoid_: Scan, snapshot, custom image (a Bulk Add snap is a transient photo that is read and discarded, never kept)
 
 **No longer in the Catalog**:
 The flag on a **Printing** whose **Owned Copies** remain after a **Catalog** refresh dropped it. Its last-known details are kept and shown; unlike an **Unresolved Printing**, the app once had its details.
