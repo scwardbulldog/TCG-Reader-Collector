@@ -120,6 +120,35 @@ class BatchTest {
     }
 
     @Test
+    fun `fixing a failed row by name offers the matching Cards, and choosing one proposes its Printings`() = runTest {
+        val batch = batch(printing("OP01-001").copy(name = "Roronoa Zoro"), printing("OP01-001_p1").copy(name = "Roronoa Zoro"), printing("OP02-001").copy(name = "Nami"))
+        batch.read(PhotoId(1), null)
+        val failed = batch.rows.single().id
+
+        val matches = batch.fix(failed, "zoro")
+
+        assertEquals(listOf("OP01-001"), matches.map { it.baseNumber })
+        assertEquals("zoro", assertIs<BatchRow.Failed>(batch.rows.single()).baseNumber)
+
+        batch.enterBaseNumber(failed, matches.single().baseNumber)
+
+        assertEquals(listOf("OP01-001", "OP01-001_p1"), assertIs<BatchRow.Ambiguous>(batch.rows.single()).candidates.map { it.identifier.sourceId })
+    }
+
+    @Test
+    fun `fixing a failed row with a Base Number resolves it directly, and a text that matches nothing leaves it failed`() = runTest {
+        val batch = batch(printing("OP01-001").copy(name = "Roronoa Zoro"))
+        batch.read(PhotoId(1), null)
+        batch.read(PhotoId(2), null)
+
+        assertEquals(emptyList(), batch.fix(batch.rows.first().id, "op01-001"))
+        assertEquals(emptyList(), batch.fix(batch.rows.first().id, "luffy"))
+
+        assertEquals(listOf("Failed", "Resolved"), batch.rows.map { it::class.simpleName })
+        assertEquals("luffy", assertIs<BatchRow.Failed>(batch.rows.first()).baseNumber)
+    }
+
+    @Test
     fun `entering a Base Number for a failed row resolves it, or leaves it failed when the Catalog has no match`() = runTest {
         val zoro = printing("OP01-001")
         val batch = batch(zoro)

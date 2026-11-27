@@ -117,6 +117,7 @@ fun CollectionScreen(
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
             )
             FilterBar(viewModel)
+            if (viewModel.isLoading || updatingCatalog) LoadingBar(Modifier.padding(top = 8.dp))
             when {
                 rows == null -> Unit
                 rows.isEmpty() -> EmptyState(

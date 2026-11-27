@@ -31,10 +31,27 @@ private fun variantRank(printing: Printing): Int = when (printing.variant) {
     null -> 3
 }
 
-private val printingOrder = compareBy<Printing>({ it.identifier.language }, ::variantRank)
+/** One Card's Printings in one Language as they are proposed: by Variant, then Product code (none last), then Release Product name. */
+internal val proposalOrder: Comparator<Printing> = compareBy<Printing>(::variantRank)
     .thenBy(nullsLast()) { it.productCode }
     .thenBy { it.releaseProduct }
     .thenBy { it.identifier.sourceId }
+
+private val printingOrder = compareBy<Printing> { it.identifier.language }.then(proposalOrder)
+
+private val digitRuns = Regex("\\d+|\\D+")
+
+/** Base Numbers in natural order: prefixes alphabetical, digit runs by value, so `OP9-001` precedes `OP10-113` and `OP01-001` precedes `P-004`. */
+val baseNumberOrder: Comparator<String> = Comparator { a, b ->
+    val left = digitRuns.findAll(a).map { it.value }.toList()
+    val right = digitRuns.findAll(b).map { it.value }.toList()
+    for ((x, y) in left.zip(right)) {
+        val bothNumbers = x[0].isDigit() && y[0].isDigit()
+        val order = if (bothNumbers) x.toBigInteger().compareTo(y.toBigInteger()) else x.compareTo(y)
+        if (order != 0) return@Comparator order
+    }
+    left.size.compareTo(right.size).takeIf { it != 0 } ?: a.compareTo(b)
+}
 
 /** Derives Cards from the Catalog and the Collection's Custom Printings. Flagged (No longer in the Catalog) rows are not offered. */
 class Cards(private val catalog: CatalogStore, private val collection: CollectionStore) {
@@ -43,17 +60,25 @@ class Cards(private val catalog: CatalogStore, private val collection: Collectio
         build(game, baseNumber, customPrintings(game))
 
     /**
-     * The Cards whose Printing names, in either Language, contain [query] (ignoring case and full-width/half-width
-     * forms), by Base Number. [language] keeps only Cards with a Printing in it; each Card still lists all its Printings.
-     * Custom labels are not searched: a label is not a Card name.
+     * The Base Numbers of the Cards whose Base Number or Printing names, in either Language, contain [query]
+     * (ignoring case and full-width/half-width forms). Custom labels are not searched: a label is not a Card name.
+     */
+    suspend fun baseNumbers(game: Game, query: String): Set<String> {
+        val trimmed = query.trim()
+        if (trimmed.isEmpty()) return emptySet()
+        return Language.entries
+            .flatMap { catalog.search(game, it, trimmed) }
+            .filter { it.name.containsFolded(trimmed) || it.baseNumber.containsFolded(trimmed) }
+            .mapTo(sortedSetOf(baseNumberOrder)) { it.baseNumber }
+    }
+
+    /**
+     * The Cards matched by [baseNumbers], in natural Base Number order. [language] keeps only Cards with a Printing
+     * in it; each Card still lists all its Printings.
      */
     suspend fun search(game: Game, query: String, language: Language? = null): List<Card> {
-        val trimmed = query.trim()
-        if (trimmed.isEmpty()) return emptyList()
-        val baseNumbers = Language.entries
-            .flatMap { catalog.search(game, it, trimmed) }
-            .filter { it.name.containsFolded(trimmed) }
-            .mapTo(sortedSetOf()) { it.baseNumber }
+        val baseNumbers = baseNumbers(game, query)
+        if (baseNumbers.isEmpty()) return emptyList()
         val customs = customPrintings(game)
         return baseNumbers.mapNotNull { build(game, it, customs) }
             .filter { language == null || it.printings(language).isNotEmpty() }

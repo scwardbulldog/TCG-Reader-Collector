@@ -7,11 +7,14 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
+import tcg.domain.Game
 import tcg.domain.Location
 import tcg.domain.LocationId
 import tcg.domain.OwnedCopy
 import tcg.domain.OwnedCopyId
 import tcg.domain.PrintingIdentifier
+import tcg.domain.collection.CardView
+import tcg.domain.collection.CardViewState
 import tcg.domain.collection.CollectionFilter
 import tcg.domain.collection.CollectionList
 import tcg.domain.collection.CollectionRow
@@ -37,6 +40,10 @@ class CollectionViewModel(private val list: CollectionList) : ViewModel() {
 
     private var loading: Job? = null
 
+    /** True while the list is being (re)loaded, including the first load. */
+    var isLoading by mutableStateOf(false)
+        private set
+
     fun onSearchChanged(query: String) {
         search = query
         refresh()
@@ -49,11 +56,35 @@ class CollectionViewModel(private val list: CollectionList) : ViewModel() {
 
     fun refresh() {
         loading?.cancel()
-        loading = viewModelScope.launch {
+        isLoading = true
+        val job = viewModelScope.launch {
             releaseProducts = list.releaseProducts()
             locations = list.locations()
             rows = list.rows(search, filter)
         }
+        loading = job
+        job.invokeOnCompletion { if (loading === job) isLoading = false }
+    }
+}
+
+/** Loads the read-only Card view of one Card. */
+class CardViewViewModel(private val view: CardView) : ViewModel() {
+    /** Null until loaded, and when no Printing has the Card's Base Number any more. */
+    var state by mutableStateOf<CardViewState?>(null)
+        private set
+
+    /** True from [show] until the Card has loaded, so "not loaded yet" and "gone" look different. */
+    var isLoading by mutableStateOf(false)
+        private set
+
+    private var showing: Job? = null
+
+    fun show(game: Game, baseNumber: String) {
+        showing?.cancel()
+        isLoading = true
+        val job = viewModelScope.launch { state = view.of(game, baseNumber) }
+        showing = job
+        job.invokeOnCompletion { if (showing === job) isLoading = false }
     }
 }
 

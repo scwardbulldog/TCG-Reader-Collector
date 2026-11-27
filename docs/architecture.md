@@ -36,8 +36,8 @@ Search matches a Base Number or name ignoring case and full-width/half-width for
 | `tcg.domain` | Printing (with its published Variant, Product code and Treatments), Printing identifier, Variant, Owned Copy, Location, and the store interfaces |
 | `tcg.domain.onepiece` | One Piece rules: Base Number recognition in OCR text |
 | `tcg.domain.catalog` | Parsing a Catalog file (`schemaVersion` 2 only), `CatalogUpdater`, and `CatalogRefresh` (the refresh rules; format: [catalog-format.md](catalog-format.md)) |
-| `tcg.domain.collection` | Collection list and filters, Printing detail, Custom Printings, `Cards` and `Card` (derived from the Printings; Card names; name search in both Languages with the full-width fold), `PrintingTitles` (a Printing's English title with Japanese subtext, plus Treatment and Product code text helpers), `PrintingResolver` (Catalog or Custom row for an Owned Copy), CSV export (with the Card's `English name` column) |
-| `tcg.domain.scanning` | Scan Session, lookup and manual search, `BaseNumberLocker`, Bulk Add (`Batch`, `BulkCapture`) |
+| `tcg.domain.collection` | Collection list and filters (a name search also finds the owned Printings of a matching Card in either Language), Printing detail, Custom Printings, `Cards` and `Card` (derived from the Printings; Card names; name search in both Languages with the full-width fold; natural Base Number order; the proposal order of a Card's Printings), `CardView` (the read-only Card view: Printings by Language then Variant with owned counts), `PrintingTitles` (a Printing's English title with Japanese subtext, plus Treatment and Product code text helpers), `PrintingResolver` (Catalog or Custom row for an Owned Copy), CSV export (with the Card's `English name` column) |
+| `tcg.domain.scanning` | Scan Session, the typed search (`find`: Base Number to proposals, else Card-first name search with `CardMatch` rows), `BaseNumberLocker`, Bulk Add (`Batch`, `BulkCapture`; a failed row is fixed by Base Number or name) |
 | `tcg.domain.backup` | The versioned JSON backup format, validation, atomic restore, reminders |
 
 ## Packages in `app`
@@ -53,7 +53,7 @@ Search matches a Base Number or name ignoring case and full-width/half-width for
 ## How a scan becomes an Owned Copy
 
 1. `CameraXCardScanner` (Single) emits `BaseNumberRead`s from the on-screen card outline. `BaseNumberLocker` turns reads into a lock by voting (`DEFAULT_VOTES`). A lock only fills the text field; the collector taps Look up.
-2. `ScanSessionInput.lookup` finds candidate Printings for the Base Number in the session's current Language, from the Catalog and the Collection's Custom Printings. One match is preselected, never added without a tap.
+2. `ScanSessionInput.find` is the one typed search. A Base Number with Printings in the session's current Language goes straight to its proposals (`lookup`: Catalog plus the Collection's Custom Printings, ordered by Variant, Product code, then Release Product; one match is preselected, never added without a tap). Anything else lists Cards (`searchCards`: one row each, natural Base Number order); choosing one runs `lookup` on its Base Number. If nothing matches, the collector can create a Custom Printing or skip.
 3. The collector confirms (count, condition, Location). `ScanSessionInput.add` writes all copies through `CollectionStore.addAll`, atomically, and remembers the Location for the next add.
 4. In Bulk Add, photos are read in the background by `BulkCapture` via `PhotoSource`, merged into `Batch` rows (resolved, ambiguous, failed), and nothing reaches the Collection until "Add all".
 
@@ -66,7 +66,8 @@ Today the state that ties this together (the open confirmation, Language switchi
 | Change | Start in |
 | --- | --- |
 | A scan or search rule | `domain/.../scanning/ScanSessionInput.kt` |
-| Card grouping, Card names or name matching | `domain/.../collection/Card.kt`, `domain/.../SearchText.kt` |
+| Card grouping, Card names, name matching, proposal or Base Number order | `domain/.../collection/Card.kt`, `domain/.../SearchText.kt` |
+| The Card view | `domain/.../collection/CardView.kt`, `app/.../ui/CardViewScreen.kt`; navigation is the back stack in `MainActivity` |
 | How a Printing is titled (English title, Japanese subtext) | `domain/.../collection/PrintingTitle.kt`; the screens read it through `rememberPrintingTitle` in `app/.../ui/Labels.kt` |
 | Bulk Add merging or review rows | `domain/.../scanning/Batch.kt`, `BulkCapture.kt` |
 | What the Collection list shows | `domain/.../collection/CollectionList.kt` |

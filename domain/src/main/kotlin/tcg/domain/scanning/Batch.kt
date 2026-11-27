@@ -64,6 +64,27 @@ class Batch(private val input: ScanSessionInput) {
         addResolved(printing, row.count)
     }
 
+    /**
+     * Fixes the failed row [id] from text the collector typed. A Base Number goes straight to its Printings, as
+     * [enterBaseNumber]. Otherwise the row stays failed and the Cards whose name matches are returned, in the session's
+     * Language, for the collector to choose from; choosing one is [enterBaseNumber] with its Base Number.
+     */
+    suspend fun fix(id: BatchRowId, text: String): List<CardMatch> {
+        val at = entries.indexOfFirst { it is BatchRow.Failed && it.id == id }
+        require(at >= 0) { "No failed row $id" }
+        when (val lookup = input.lookup(text)) {
+            is ScanLookup.NoMatch -> {
+                entries[at] = (entries[at] as BatchRow.Failed).copy(baseNumber = text.trim().takeIf { it.isNotEmpty() })
+                return input.searchCards(text)
+            }
+            is ScanLookup.Candidates -> {
+                entries.removeAt(at)
+                place(lookup)
+                return emptyList()
+            }
+        }
+    }
+
     /** Re-reads the failed row [id] from a Base Number the collector typed; it stays failed if the Catalog has no match. */
     suspend fun enterBaseNumber(id: BatchRowId, baseNumber: String) {
         val at = entries.indexOfFirst { it is BatchRow.Failed && it.id == id }

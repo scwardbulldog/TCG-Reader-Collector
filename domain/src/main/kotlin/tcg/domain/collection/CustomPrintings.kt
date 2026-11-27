@@ -6,7 +6,6 @@ import tcg.domain.Game
 import tcg.domain.Language
 import tcg.domain.Printing
 import tcg.domain.PrintingIdentifier
-import tcg.domain.containsFolded
 import tcg.domain.isCustom
 import java.util.UUID
 
@@ -58,12 +57,6 @@ class CustomPrintings(
     /** The Custom Printings of one Base Number in one Language. */
     suspend fun forBaseNumber(game: Game, language: Language, baseNumber: String): List<Printing> =
         collection.customPrintings(game, language).filter { it.baseNumber == baseNumber }
-
-    /** The Custom Printings of one Language whose Base Number or label contains [query], ignoring case and full-width/half-width forms. */
-    suspend fun search(game: Game, language: Language, query: String): List<Printing> =
-        collection.customPrintings(game, language).filter {
-            it.baseNumber.containsFolded(query) || it.name.containsFolded(query)
-        }
 
     private suspend fun find(identifier: PrintingIdentifier): Printing? =
         if (identifier.isCustom) collection.customPrinting(identifier) else null

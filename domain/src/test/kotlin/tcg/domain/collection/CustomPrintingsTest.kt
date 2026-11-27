@@ -73,7 +73,7 @@ class CustomPrintingsTest {
     }
 
     @Test
-    fun `a Custom Printing is proposed after the Catalog's Printings of its Base Number and found by search`() = runTest {
+    fun `a Custom Printing is proposed after the Catalog's Printings of its Base Number and its label is not searched`() = runTest {
         source.publish(Game.OnePiece, Language.English, "v1", catalogJson("en", "OP01-001" to "Roronoa Zoro", "OP01-001_p1" to "Roronoa Zoro"))
         updater.update()
         val input = session()
@@ -82,8 +82,7 @@ class CustomPrintingsTest {
         val candidates = (input.lookup("OP01-001") as ScanLookup.Candidates).printings
 
         assertEquals(listOf("OP01-001", "OP01-001_p1", printing.identifier.sourceId), candidates.map { it.identifier.sourceId })
-        assertEquals(listOf(printing), input.search("milk box"))
-        assertTrue(input.search("OP01-001").contains(printing))
+        assertTrue(input.searchCards("milk box").isEmpty())
     }
 
     @Test

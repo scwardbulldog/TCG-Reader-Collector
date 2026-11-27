@@ -34,6 +34,8 @@ import tcg.app.scanning.CachePhotoSource
 import tcg.app.scanning.SharedPreferencesLanguageStore
 import tcg.app.storage.AppDatabase
 import tcg.app.ui.BackupViewModel
+import tcg.app.ui.CardViewScreen
+import tcg.app.ui.CardViewViewModel
 import tcg.app.ui.CollectionActions
 import tcg.app.ui.CollectionScreen
 import tcg.app.ui.CollectionViewModel
@@ -47,6 +49,7 @@ import tcg.domain.Language
 import tcg.domain.PrintingIdentifier
 import tcg.domain.catalog.CatalogUpdater
 import tcg.domain.backup.CollectionBackup
+import tcg.domain.collection.CardView
 import tcg.domain.collection.CollectionExport
 import tcg.domain.collection.CollectionList
 import tcg.domain.collection.PrintingDetail
@@ -185,9 +188,29 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-private val printingSaver = listSaver<PrintingIdentifier?, String>(
-    save = { it?.let { p -> listOf(p.game.name, p.language.name, p.sourceId) } ?: emptyList() },
-    restore = { if (it.isEmpty()) null else PrintingIdentifier(Game.valueOf(it[0]), Language.valueOf(it[1]), it[2]) },
+/** A screen above the Collection list: a Printing's detail or a Card's read-only view. The back stack is a list of these. */
+private sealed interface Destination {
+    data class OpenPrinting(val printing: PrintingIdentifier) : Destination
+    data class OpenCard(val game: Game, val baseNumber: String) : Destination
+}
+
+// Fields are tab-separated; a Printing identifier's source id never holds a tab.
+private val stackSaver = listSaver<List<Destination>, String>(
+    save = {
+        it.map { destination ->
+            when (destination) {
+                is Destination.OpenPrinting -> listOf("P", destination.printing.game.name, destination.printing.language.name, destination.printing.sourceId)
+                is Destination.OpenCard -> listOf("C", destination.game.name, destination.baseNumber)
+            }.joinToString("\t")
+        }
+    },
+    restore = {
+        it.map { saved ->
+            val fields = saved.split("\t")
+            if (fields[0] == "P") Destination.OpenPrinting(PrintingIdentifier(Game.valueOf(fields[1]), Language.valueOf(fields[2]), fields[3]))
+            else Destination.OpenCard(Game.valueOf(fields[1]), fields[2])
+        }
+    },
 )
 
 private const val MAX_BACKUP_BYTES = 64 * 1024 * 1024
@@ -204,7 +227,7 @@ private fun CollectionApp(
     onBackup: () -> Unit,
     onRestore: () -> Unit,
 ) {
-    var selected by rememberSaveable(stateSaver = printingSaver) { mutableStateOf<PrintingIdentifier?>(null) }
+    var stack by rememberSaveable(stateSaver = stackSaver) { mutableStateOf(emptyList<Destination>()) }
     var scanning by rememberSaveable { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     val catalog = remember { database.catalogStore() }
@@ -225,9 +248,9 @@ private fun CollectionApp(
         return
     }
 
-    val current = selected
+    val top = stack.lastOrNull()
     val viewModel = viewModel<CollectionViewModel>(initializer = { CollectionViewModel(CollectionList(collection, catalog)) })
-    if (current == null) {
+    if (top == null) {
         CollectionScreen(
             viewModel = viewModel,
             backup = backup,
@@ -250,13 +273,36 @@ private fun CollectionApp(
             updatingCatalog = updatingCatalog,
             catalogRevision = catalogRevision,
             snackbarHostState = snackbarHostState,
-            onOpen = { selected = it },
+            onOpen = { stack = listOf(Destination.OpenPrinting(it)) },
         )
     } else {
-        BackHandler { selected = null }
-        val detailViewModel = viewModel<PrintingDetailViewModel>(
-            initializer = { PrintingDetailViewModel { printing, location -> PrintingDetail(printing, collection, catalog, location) } },
-        )
-        PrintingDetailScreen(detailViewModel, current, viewModel.filter.location, onBack = { selected = null })
+        val back = { stack = stack.dropLast(1) }
+        BackHandler(onBack = back)
+        when (top) {
+            is Destination.OpenCard -> {
+                val cardViewModel = viewModel<CardViewViewModel>(initializer = { CardViewViewModel(CardView(catalog, collection)) })
+                CardViewScreen(
+                    cardViewModel,
+                    top.game,
+                    top.baseNumber,
+                    onOpenPrinting = { stack = stack + Destination.OpenPrinting(it) },
+                    onBack = back,
+                )
+            }
+            is Destination.OpenPrinting -> {
+                val detailViewModel = viewModel<PrintingDetailViewModel>(
+                    initializer = { PrintingDetailViewModel { printing, location -> PrintingDetail(printing, collection, catalog, location) } },
+                )
+                // The Collection list's Location filter only applies to a detail opened straight from the list.
+                val locationFilter = if (stack.size == 1) viewModel.filter.location else null
+                PrintingDetailScreen(
+                    detailViewModel,
+                    top.printing,
+                    locationFilter,
+                    onOpenCard = { game, baseNumber -> stack = stack + Destination.OpenCard(game, baseNumber) },
+                    onBack = back,
+                )
+            }
+        }
     }
 }

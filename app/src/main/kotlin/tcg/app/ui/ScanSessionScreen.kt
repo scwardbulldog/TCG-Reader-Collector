@@ -12,6 +12,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.AlertDialog
@@ -39,6 +41,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import tcg.domain.Condition
 import tcg.domain.Language
@@ -46,6 +50,7 @@ import tcg.domain.Location
 import tcg.domain.Printing
 import tcg.domain.collection.productText
 import tcg.domain.collection.treatmentText
+import tcg.domain.scanning.CardMatch
 import tcg.domain.scanning.ScanScope
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -151,7 +156,9 @@ private fun InputForm(viewModel: ScanViewModel) {
             }
         }
         viewModel.lastAdded?.let { Text(it, color = MaterialTheme.colorScheme.primary) }
-        if ((bulkMode || result !is ScanInputResult.SearchResults) && !(bulkMode && viewModel.reviewing)) {
+        // A search hides the camera at once; a re-lookup under an open confirmation keeps it bound.
+        val searchingHere = viewModel.searching && viewModel.confirmation == null
+        if ((bulkMode || (result !is ScanInputResult.SearchResults && !searchingHere)) && !(bulkMode && viewModel.reviewing)) {
             ScanCameraPane(
                 scope,
                 onRead = viewModel::onRead,
@@ -190,17 +197,25 @@ private fun InputForm(viewModel: ScanViewModel) {
             ) { Text("Review (${viewModel.bulkRows.size})") }
             return@Column
         }
+        val focusManager = LocalFocusManager.current
+        // Closing the keyboard shows the collector the search is under way, rather than leaving the camera as it was.
+        val search = {
+            focusManager.clearFocus()
+            viewModel.search()
+        }
         OutlinedTextField(
             value = viewModel.query,
             onValueChange = viewModel::onQueryChanged,
             label = { Text("Base Number or name") },
             singleLine = true,
+            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+            keyboardActions = KeyboardActions(onSearch = { if (viewModel.query.isNotBlank()) search() }),
             modifier = Modifier.fillMaxWidth(),
         )
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Button(onClick = viewModel::lookUp, enabled = viewModel.query.isNotBlank()) { Text("Look up Base Number") }
-            OutlinedButton(onClick = viewModel::search, enabled = viewModel.query.isNotBlank()) { Text("Search") }
+            Button(onClick = search, enabled = viewModel.query.isNotBlank() && !viewModel.searching) { Text("Search") }
         }
+        if (viewModel.searching) LoadingBar()
         when (result) {
             ScanInputResult.None -> Unit
             is ScanInputResult.NoMatch -> {
@@ -228,12 +243,12 @@ private fun InputForm(viewModel: ScanViewModel) {
             }
             is ScanInputResult.SearchResults -> {
                 TextButton(onClick = viewModel::dismissSearch) { Text("Back to camera") }
-                if (result.printings.isEmpty()) {
+                if (result.cards.isEmpty()) {
                     Text("No cards match your search.", style = MaterialTheme.typography.bodyLarge)
                 } else {
                     LazyColumn(Modifier.weight(1f)) {
-                        items(result.printings, key = { it.identifier.sourceId }) { printing ->
-                            PrintingRow(printing, Modifier.clickable { viewModel.openSearchResult(printing) })
+                        items(result.cards, key = { it.baseNumber }) { card ->
+                            CardMatchRow(card, Modifier.clickable { viewModel.openCard(card) })
                             HorizontalDivider()
                         }
                     }
@@ -302,6 +317,25 @@ private fun ConfirmationForm(viewModel: ScanViewModel, confirmation: Confirmatio
             enabled = confirmation.selected != null,
             modifier = Modifier.fillMaxWidth(),
         ) { Text(if (confirmation.count == 1) "Add" else "Add ${confirmation.count} copies") }
+    }
+}
+
+/** One Card of a name search: its title, Base Number, how many Printings it has in the session's Language, and the Normal Printing's image. */
+@Composable
+internal fun CardMatchRow(card: CardMatch, modifier: Modifier = Modifier) {
+    Row(
+        modifier.fillMaxWidth().padding(12.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        PrintingImage(card.imageUrl, Modifier.width(64.dp))
+        Column(Modifier.weight(1f)) {
+            PrintingHeading(card.title)
+            Text(
+                "${card.baseNumber} · ${card.printingCount} ${if (card.printingCount == 1) "Printing" else "Printings"}",
+                style = MaterialTheme.typography.bodyMedium,
+            )
+        }
     }
 }
 

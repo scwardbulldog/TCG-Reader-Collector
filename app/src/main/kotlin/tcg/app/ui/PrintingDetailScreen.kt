@@ -40,6 +40,7 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import tcg.domain.Condition
+import tcg.domain.Game
 import tcg.domain.Location
 import tcg.domain.LocationId
 import tcg.domain.OwnedCopy
@@ -54,6 +55,7 @@ fun PrintingDetailScreen(
     viewModel: PrintingDetailViewModel,
     printing: PrintingIdentifier,
     locationFilter: LocationId?,
+    onOpenCard: (Game, String) -> Unit,
     onBack: () -> Unit,
 ) {
     LaunchedEffect(printing) { viewModel.show(printing, locationFilter) }
@@ -82,6 +84,7 @@ fun PrintingDetailScreen(
         },
     ) { padding ->
         Column(Modifier.fillMaxSize().padding(padding)) {
+            if (!state.loaded) LoadingBar()
             val header = listOfNotNull(
                 entry?.baseNumber,
                 printing.language.label(),
@@ -99,6 +102,9 @@ fun PrintingDetailScreen(
                     Text(header.joinToString(" · "), style = MaterialTheme.typography.bodyMedium)
                     if (state.noLongerInCatalog) NoLongerInCatalogFlag()
                     if (state.unresolved) UnresolvedPrintingFlag()
+                    if (entry != null && entry.baseNumber.isNotBlank()) {
+                        TextButton(onClick = { onOpenCard(printing.game, entry.baseNumber) }) { Text("All Printings of this Card") }
+                    }
                     if (printing.isCustom && entry != null) {
                         TextButton(onClick = { renaming = true }) { Text("Rename") }
                     }

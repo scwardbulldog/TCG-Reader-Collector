@@ -2,6 +2,7 @@ package tcg.domain.collection
 
 import tcg.domain.CatalogStore
 import tcg.domain.CollectionStore
+import tcg.domain.Game
 import tcg.domain.Language
 import tcg.domain.Location
 import tcg.domain.LocationId
@@ -39,12 +40,17 @@ data class CollectionFilter(
 /** The Collection grouped by Printing, with search, filters and the default display order. */
 class CollectionList(private val collection: CollectionStore, catalog: CatalogStore) {
     private val printings = PrintingResolver(collection, catalog)
+    private val cards = Cards(catalog, collection)
 
-    suspend fun rows(search: String = "", filter: CollectionFilter = CollectionFilter()): List<CollectionRow> =
-        collection.countsByPrinting()
+    /** [search] matches a Printing's own details, or the Base Number or any Printing name of its Card in either Language. */
+    suspend fun rows(search: String = "", filter: CollectionFilter = CollectionFilter()): List<CollectionRow> {
+        val query = search.trim()
+        val matchedCards = if (query.isEmpty()) emptyMap() else Game.entries.associateWith { cards.baseNumbers(it, query) }
+        return collection.countsByPrinting()
             .mapNotNull { (printing, count) -> row(printing, count, filter) }
-            .filter { it.matches(search.trim()) }
+            .filter { it.matches(query) || it.baseNumber in matchedCards[it.printing.game].orEmpty() }
             .sortedWith(displayOrder)
+    }
 
     /** The Release Products of every owned Printing whose details are known, for choosing a filter. */
     suspend fun releaseProducts(): List<String> =
@@ -74,7 +80,7 @@ class CollectionList(private val collection: CollectionStore, catalog: CatalogSt
 
     private companion object {
         val displayOrder = compareBy<CollectionRow> { it.baseNumber == null }
-            .thenBy { it.baseNumber.orEmpty() }
+            .thenBy(baseNumberOrder) { it.baseNumber.orEmpty() }
             .thenBy { it.printing.language }
             .thenBy { it.printing.game }
             .thenBy { it.printing.sourceId }

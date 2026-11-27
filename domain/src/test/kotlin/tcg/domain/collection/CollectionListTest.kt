@@ -81,6 +81,19 @@ class CollectionListTest {
     }
 
     @Test
+    fun `a name in either Language finds the owned Printings of the Card, still one row per Printing, and the Language filter narrows`() = runTest {
+        val en = own(Language.English, "OP01-001", "OP01-001", "Roronoa Zoro")
+        val jp = own(Language.Japanese, "OP01-001", "OP01-001", "ロロノア・ゾロ", copies = 2)
+        val jpAlt = own(Language.Japanese, "OP01-001_p1", "OP01-001", "ロロノア・ゾロ")
+        val nami = own(Language.English, "OP01-016", "OP01-016", "Nami")
+
+        assertEquals(setOf(en, jp, jpAlt), list.rows("zoro").map { it.printing }.toSet())
+        assertEquals(setOf(en, jp, jpAlt), list.rows("ゾロ").map { it.printing }.toSet())
+        assertEquals(listOf(jp, jpAlt), list.rows("zoro", CollectionFilter(language = Language.Japanese)).map { it.printing })
+        assertEquals(listOf(nami), list.rows("nami").map { it.printing })
+    }
+
+    @Test
     fun `an Unresolved Printing matches search on its Printing identifier`() = runTest {
         own(Language.English, "OP01-001", "OP01-001", "Roronoa Zoro")
         val unresolved = ownUnresolved(Language.English, "ST99-007_p2")

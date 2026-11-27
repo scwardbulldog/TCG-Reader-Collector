@@ -50,12 +50,12 @@ class ScanSessionTest {
         val input = input()
 
         assertEquals(ScanLookup.Candidates(listOf(english), english), input.lookup("OP01-001"))
-        assertEquals(listOf(english), input.search("OP01-001"))
+        assertEquals(listOf("OP01-001"), input.searchCards("zoro").map { it.baseNumber })
 
         input.session.switchLanguage(Language.Japanese)
 
         assertEquals(ScanLookup.Candidates(listOf(japanese), japanese), input.lookup("OP01-001"))
-        assertEquals(listOf(japanese), input.search("OP01-001"))
+        assertEquals(listOf("OP01-001"), input.searchCards("ゾロ").map { it.baseNumber })
     }
 
     @Test

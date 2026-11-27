@@ -79,13 +79,18 @@ private fun FailedRow(viewModel: ScanViewModel, row: BatchRow.Failed) {
                 OutlinedTextField(
                     value = typed,
                     onValueChange = { typed = it },
-                    label = { Text("Base Number") },
+                    label = { Text("Base Number or name") },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Button(onClick = { viewModel.enterBaseNumber(row.id, typed) }, enabled = typed.isNotBlank()) { Text("Look up") }
+                    Button(onClick = { viewModel.fixRow(row.id, typed) }, enabled = typed.isNotBlank()) { Text("Look up") }
                     TextButton(onClick = { viewModel.removeRow(row.id) }) { Text("Remove") }
+                }
+                val matches = viewModel.rowMatches[row.id]
+                if (matches != null && matches.isEmpty()) Text("No $language card matches your search.", style = MaterialTheme.typography.bodyMedium)
+                matches?.forEach { card ->
+                    CardMatchRow(card, Modifier.clickable { viewModel.enterBaseNumber(row.id, card.baseNumber) })
                 }
             }
         }

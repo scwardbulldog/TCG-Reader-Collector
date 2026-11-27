@@ -11,6 +11,7 @@ import tcg.domain.PrintingIdentifier
 import tcg.domain.fixtureVariant
 import tcg.domain.catalog.InMemoryCatalogStore
 import tcg.domain.collection.InMemoryCollectionStore
+import tcg.domain.collection.PrintingTitle
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -148,29 +149,91 @@ class ScanSessionInputTest {
     }
 
     @Test
-    fun `manual search matches Base Number or name within the session Language only`() = runTest {
-        val zoro = printing("OP01-001")
-        val zoroAlt = printing("OP01-001_p1")
-        val nami = printing("OP01-016", name = "Nami", baseNumber = "OP01-016")
-        val japaneseZoro = printing("OP01-001", name = "ロロノア・ゾロ", language = Language.Japanese)
-        seed(Language.English, nami, zoroAlt, zoro)
-        seed(Language.Japanese, japaneseZoro)
-        val (english) = entry(Language.English)
-        val (japanese) = entry(Language.Japanese)
+    fun `a name search lists each matching Card once in natural Base Number order`() = runTest {
+        seed(
+            Language.English,
+            printing("OP10-113", name = "Roronoa Zoro", baseNumber = "OP10-113"),
+            printing("P-004", name = "Zoro Promo", baseNumber = "P-004"),
+            printing("OP01-001_p1"),
+            printing("OP01-001"),
+            printing("OP01-001_r1"),
+            printing("OP02-016", name = "Nami", baseNumber = "OP02-016"),
+            printing("OP9-001", name = "Zoro Early", baseNumber = "OP9-001"),
+        )
+        val (entry) = entry()
 
-        assertEquals(listOf(zoro, zoroAlt), english.search("zoro"))
-        assertEquals(listOf(zoro, zoroAlt), english.search("op01-001"))
-        assertEquals(listOf(nami), english.search("OP01-016"))
-        assertEquals(listOf(japaneseZoro), japanese.search("OP01-001"))
-        assertEquals(emptyList(), japanese.search("nami"))
+        val found = entry.searchCards("zoro")
+
+        assertEquals(listOf("OP01-001", "OP9-001", "OP10-113", "P-004"), found.map { it.baseNumber })
+        assertEquals(3, found.first().printingCount)
         assertEquals(emptyMap(), collection.countsByPrinting())
     }
 
     @Test
-    fun `a blank search finds nothing`() = runTest {
-        seed(Language.English, printing("OP01-001"))
+    fun `a Card row shows the English title with Japanese subtext, the Language's Printing count and the Normal Printing's image`() = runTest {
+        fun withImage(printing: Printing, image: String) = printing.copy(imageUrl = image)
+        seed(Language.English, printing("OP01-001", name = "Roronoa Zoro"))
+        seed(
+            Language.Japanese,
+            withImage(printing("OP01-001_p1", name = "ロロノア・ゾロ", language = Language.Japanese), "alt.png"),
+            withImage(printing("OP01-001", name = "ロロノア・ゾロ", language = Language.Japanese), "normal.png"),
+        )
+        val (japanese) = entry(Language.Japanese)
+        val (english) = entry(Language.English)
+
+        val jp = japanese.searchCards("ゾロ").single()
+        assertEquals(PrintingTitle("Roronoa Zoro", "ロロノア・ゾロ"), jp.title)
+        assertEquals(2, jp.printingCount)
+        assertEquals("normal.png", jp.imageUrl)
+        assertEquals(PrintingTitle("Roronoa Zoro", null), english.searchCards("zoro").single().title)
+    }
+
+    @Test
+    fun `results stay in the session's Language and a blank search finds nothing`() = runTest {
+        seed(Language.English, printing("OP01-001", name = "Roronoa Zoro"))
+        seed(Language.Japanese, printing("OP01-001", name = "ロロノア・ゾロ", language = Language.Japanese), printing("OP01-099", name = "ゾロの刀", baseNumber = "OP01-099", language = Language.Japanese))
+        val (english) = entry(Language.English)
+
+        assertEquals(listOf("OP01-001"), english.searchCards("ゾロ").map { it.baseNumber })
+        assertEquals(emptyList(), english.searchCards("刀"))
+        assertEquals(emptyList(), english.searchCards("  "))
+    }
+
+    @Test
+    fun `one search goes straight to proposals for a Base Number, lists Cards for a name and falls back to no match`() = runTest {
+        val zoro = printing("OP01-001")
+        seed(Language.English, zoro, printing("OP02-016", name = "Nami", baseNumber = "OP02-016"))
         val (entry) = entry()
 
-        assertEquals(emptyList(), entry.search("  "))
+        assertEquals(ScanSearch.Proposals(ScanLookup.Candidates(listOf(zoro), preselected = zoro)), entry.find(" op01-001 "))
+        assertEquals(listOf("OP01-001"), assertIs<ScanSearch.Cards>(entry.find("zoro")).matches.map { it.baseNumber })
+        assertEquals(listOf("OP01-001", "OP02-016"), assertIs<ScanSearch.Cards>(entry.find("op0")).matches.map { it.baseNumber })
+        assertEquals(ScanSearch.NoMatch("op99-999"), entry.find(" op99-999 "))
+    }
+
+    @Test
+    fun `a partial Base Number lists its Cards`() = runTest {
+        seed(Language.English, printing("OP01-001"), printing("OP01-016", name = "Nami", baseNumber = "OP01-016"), printing("OP02-001", baseNumber = "OP02-001"))
+        val (entry) = entry()
+
+        assertEquals(listOf("OP01-001", "OP01-016"), entry.searchCards("op01-0").map { it.baseNumber })
+    }
+
+    @Test
+    fun `proposals run Variant, then Product code, then Release Product name`() = runTest {
+        fun variant(sourceId: String, code: String?, product: String) =
+            printing(sourceId).copy(productCode = code, releaseProduct = product)
+        val normal = variant("OP01-001", "OP-01", "Romance Dawn")
+        val reprintLate = variant("OP01-001_r2", "OP-09", "Emperors in the New World")
+        val reprintEarly = variant("OP01-001_r1", "OP-05", "Awakening of the New Era")
+        val altNoCode = variant("OP01-001_p3", null, "Alpha promo")
+        val altB = variant("OP01-001_p2", "OP-01", "Zeta")
+        val altA = variant("OP01-001_p1", "OP-01", "Beta")
+        seed(Language.English, altNoCode, altB, reprintLate, normal, altA, reprintEarly)
+        val (entry) = entry()
+
+        val lookup = assertIs<ScanLookup.Candidates>(entry.lookup("OP01-001"))
+
+        assertEquals(listOf(normal, reprintEarly, reprintLate, altA, altB, altNoCode), lookup.printings)
     }
 }

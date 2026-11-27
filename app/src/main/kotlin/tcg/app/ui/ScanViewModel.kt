@@ -25,9 +25,11 @@ import tcg.domain.scanning.BatchRow
 import tcg.domain.scanning.BatchRowId
 import tcg.domain.scanning.BulkCapture
 import tcg.domain.scanning.BulkStatus
+import tcg.domain.scanning.CardMatch
 import tcg.domain.scanning.LanguageStore
 import tcg.domain.scanning.PhotoId
 import tcg.domain.scanning.ScanLookup
+import tcg.domain.scanning.ScanSearch
 import tcg.domain.scanning.ScanSession
 import tcg.domain.scanning.ScanSessionInput
 import java.io.File
@@ -53,7 +55,7 @@ data class PendingDiscard(val then: Then, val cards: Int) {
 sealed interface ScanInputResult {
     data object None : ScanInputResult
     data class NoMatch(val baseNumber: String) : ScanInputResult
-    data class SearchResults(val printings: List<Printing>) : ScanInputResult
+    data class SearchResults(val cards: List<CardMatch>) : ScanInputResult
 }
 
 class ScanViewModel(
@@ -177,10 +179,18 @@ class ScanViewModel(
 
     private fun newSessionInput() = ScanSessionInput(ScanSession(Game.OnePiece, languages), catalog, collection)
 
+    /** True while a lookup, search or re-lookup is running, so the screen can show it is working. */
+    var searching by mutableStateOf(false)
+        private set
+
     // One lookup, search or re-lookup at a time: a newer one, a switch or leaving the input cancels the older.
     private fun launchLookup(block: suspend () -> Unit) {
         lookupJob?.cancel()
-        lookupJob = viewModelScope.launch { block() }
+        searching = true
+        val job = viewModelScope.launch { block() }
+        lookupJob = job
+        // A cancelled older job must not switch off the newer one's indicator.
+        job.invokeOnCompletion { if (lookupJob === job) searching = false }
     }
 
     private fun confirmationOf(candidates: List<Printing>, selected: Printing?) =
@@ -259,6 +269,16 @@ class ScanViewModel(
         viewModelScope.launch { capture.enterBaseNumber(row, baseNumber) }
     }
 
+    /** The Cards offered for each failed row fixed by name; an empty list means the text matched nothing. */
+    var rowMatches by mutableStateOf<Map<BatchRowId, List<CardMatch>>>(emptyMap())
+        private set
+
+    /** Fixes a failed row from a Base Number or a name; a name lists Cards in [rowMatches] to choose from. */
+    fun fixRow(row: BatchRowId, text: String) {
+        val capture = bulk ?: return
+        viewModelScope.launch { rowMatches = rowMatches + (row to capture.fix(row, text)) }
+    }
+
     fun removeRow(row: BatchRowId) {
         val capture = bulk ?: return
         viewModelScope.launch { capture.remove(row) }
@@ -315,6 +335,7 @@ class ScanViewModel(
         bulkStatus = BulkStatus()
         bulkRows = emptyList()
         reviewing = false
+        rowMatches = emptyMap()
         pendingDiscard = null
     }
 
@@ -322,11 +343,19 @@ class ScanViewModel(
 
     fun onQueryChanged(text: String) {
         query = text
+        if (result is ScanInputResult.NoMatch) result = ScanInputResult.None
     }
 
-    fun lookUp() {
+    /** Looks up a Base Number or searches by name: proposals for a Base Number, a Card list for anything else. */
+    fun search() {
         val current = sessionInput
-        launchLookup { show(current.lookup(query)) }
+        launchLookup {
+            when (val found = current.find(query)) {
+                is ScanSearch.Proposals -> show(found.candidates)
+                is ScanSearch.Cards -> result = ScanInputResult.SearchResults(found.matches)
+                is ScanSearch.NoMatch -> result = ScanInputResult.NoMatch(found.text)
+            }
+        }
     }
 
     /**
@@ -352,11 +381,6 @@ class ScanViewModel(
             }
             is ScanLookup.NoMatch -> result = ScanInputResult.NoMatch(lookup.baseNumber)
         }
-    }
-
-    fun search() {
-        val current = sessionInput
-        launchLookup { result = ScanInputResult.SearchResults(current.search(query)) }
     }
 
     fun dismissSearch() {
@@ -390,8 +414,12 @@ class ScanViewModel(
         }
     }
 
-    fun openSearchResult(printing: Printing) {
-        confirmation = confirmationOf(listOf(printing), printing)
+    /** Opens the proposals of a Card from the search results, which stay behind them for when the collector backs out. */
+    fun openCard(card: CardMatch) {
+        val current = sessionInput
+        launchLookup {
+            (current.lookup(card.baseNumber) as? ScanLookup.Candidates)?.let { confirmation = confirmationOf(it.printings, it.preselected) }
+        }
     }
 
     fun select(printing: Printing) {

@@ -66,6 +66,9 @@ class BulkCapture(
     /** Resolves the ambiguous row [id] to one of its candidates. */
     suspend fun pick(id: BatchRowId, printing: Printing) = fix { batch.pick(id, printing) }
 
+    /** Fixes the failed row [id] from typed text: a Base Number resolves it, a name returns the matching Cards (see [Batch.fix]). */
+    suspend fun fix(id: BatchRowId, text: String): List<CardMatch> = fix { batch.fix(id, text) }
+
     /** Re-reads the failed row [id] from a Base Number the collector typed. */
     suspend fun enterBaseNumber(id: BatchRowId, baseNumber: String) = fix { batch.enterBaseNumber(id, baseNumber) }
 

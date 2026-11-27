@@ -101,3 +101,11 @@ _Avoid_: Batch scan, import
 **Batch**:
 One **Bulk Add** run's set of snapped cards, shown as review rows. It is discarded unless "Add all" is tapped.
 _Avoid_: Scan Session (that is the whole run of scans), import
+
+**Proposals**:
+The **Printings** of one **Card** in the **Scan Session**'s **Language**, offered for the collector to confirm: ordered by **Variant** (Normal, **Reprint**, **Alternate Art**), then **Product code**, then **Release Product** name. A name search lists **Cards**, not Printings; choosing a Card opens its Proposals.
+_Avoid_: Search results (a search lists Cards)
+
+**Card view**:
+The read-only screen listing every **Printing** of a **Card** in both **Languages**, grouped by Language then **Variant**, with the collector's owned count. Reached from a **Printing**'s detail; nothing is added from it.
+_Avoid_: Card detail, Card page
