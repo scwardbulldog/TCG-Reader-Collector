@@ -33,9 +33,9 @@ The Catalog and the Collection are stored apart: a Catalog refresh never touches
 
 | Package | Responsibility |
 | --- | --- |
-| `tcg.domain` | Printing, Printing identifier, Variant, Owned Copy, Location, and the store interfaces |
-| `tcg.domain.onepiece` | One Piece rules: Base Number recognition in OCR text, Variant from the ID suffix (**v2**: Variant becomes a published field) |
-| `tcg.domain.catalog` | Parsing a Catalog file and `CatalogUpdater` (format: [catalog-format.md](catalog-format.md); **v2**: new file version) |
+| `tcg.domain` | Printing (with its published Variant, Product code and Treatments), Printing identifier, Variant, Owned Copy, Location, and the store interfaces |
+| `tcg.domain.onepiece` | One Piece rules: Base Number recognition in OCR text |
+| `tcg.domain.catalog` | Parsing a Catalog file (`schemaVersion` 2 only) and `CatalogUpdater` (format: [catalog-format.md](catalog-format.md)) |
 | `tcg.domain.collection` | Collection list and filters, Printing detail, Custom Printings, last-known Printings (**v2**: replaced by a flag on the one Printing table), CSV export |
 | `tcg.domain.scanning` | Scan Session, lookup and manual search, `BaseNumberLocker`, Bulk Add (`Batch`, `BulkCapture`) |
 | `tcg.domain.backup` | The versioned JSON backup format, validation, atomic restore, reminders |

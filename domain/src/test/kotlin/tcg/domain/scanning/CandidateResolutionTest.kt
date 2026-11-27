@@ -5,15 +5,37 @@ import tcg.domain.Game
 import tcg.domain.Language
 import tcg.domain.Printing
 import tcg.domain.PrintingIdentifier
+import tcg.domain.Variant
 import tcg.domain.catalog.InMemoryCatalogStore
+import tcg.domain.fixtureVariant
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
 class CandidateResolutionTest {
     private val catalog = InMemoryCatalogStore()
 
-    private fun printing(sourceId: String, language: Language = Language.English, baseNumber: String = "OP01-001") =
-        Printing(PrintingIdentifier(Game.OnePiece, language, sourceId), baseNumber, "Product $sourceId", "L", "Zoro", "")
+    private fun printing(
+        sourceId: String,
+        language: Language = Language.English,
+        baseNumber: String = "OP01-001",
+        variant: Variant? = fixtureVariant(sourceId),
+    ) = Printing(PrintingIdentifier(Game.OnePiece, language, sourceId), baseNumber, "Product $sourceId", "L", "Zoro", "", variant)
+
+    @Test
+    fun `candidates are ordered by the published Variant, not by the ID`() = runTest {
+        catalog.replaceCatalog(
+            Game.OnePiece,
+            Language.English,
+            listOf(
+                printing("OP01-001", variant = Variant.AlternateArt),
+                printing("OP01-001_p1@1", variant = Variant.Normal),
+            ),
+        )
+
+        val candidates = resolveCandidates(catalog, Game.OnePiece, Language.English, "OP01-001")
+
+        assertEquals(listOf("OP01-001_p1@1", "OP01-001"), candidates.map { it.identifier.sourceId })
+    }
 
     @Test
     fun `Normal comes first, Reprints beneath it, then Alternate Arts, whatever the Catalog order`() = runTest {

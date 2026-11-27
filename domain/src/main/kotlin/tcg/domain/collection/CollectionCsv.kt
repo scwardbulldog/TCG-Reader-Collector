@@ -8,7 +8,6 @@ import tcg.domain.OwnedCopy
 import tcg.domain.Printing
 import tcg.domain.PrintingIdentifier
 import tcg.domain.Variant
-import tcg.domain.onepiece.OnePiece
 
 /** The Collection as CSV text for Google Sheets: one row per Owned Copy, no quantity column. */
 object CollectionCsv {
@@ -36,7 +35,7 @@ object CollectionCsv {
             printing?.baseNumber.orEmpty(),
             "${id.game.code()} / ${id.language.code()} / ${id.sourceId}",
             printing?.name.orEmpty(),
-            printing?.let { OnePiece.variantOf(id)?.label() }.orEmpty(),
+            printing?.variant?.label().orEmpty(),
             printing?.releaseProduct.orEmpty(),
             copy.condition.label(),
             copy.location?.let { locations[it] }.orEmpty(),

@@ -6,6 +6,7 @@ import tcg.domain.Game
 import tcg.domain.Language
 import tcg.domain.Printing
 import tcg.domain.PrintingIdentifier
+import tcg.domain.Variant
 import tcg.domain.catalog.InMemoryCatalogStore
 import tcg.domain.collection.InMemoryCollectionStore
 import kotlin.test.Test
@@ -20,7 +21,7 @@ class ScanSessionTest {
     private val languages = InMemoryLanguageStore()
 
     private fun printing(language: Language, name: String = "Roronoa Zoro") =
-        Printing(PrintingIdentifier(Game.OnePiece, language, "OP01-001"), "OP01-001", "Product", "L", name, "")
+        Printing(PrintingIdentifier(Game.OnePiece, language, "OP01-001"), "OP01-001", "Product", "L", name, "", Variant.Normal)
 
     private fun input() = ScanSessionInput(ScanSession(Game.OnePiece, languages), catalog, collection)
 

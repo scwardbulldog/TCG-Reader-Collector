@@ -44,7 +44,6 @@ import tcg.domain.Condition
 import tcg.domain.Language
 import tcg.domain.Location
 import tcg.domain.Printing
-import tcg.domain.onepiece.OnePiece
 import tcg.domain.scanning.ScanScope
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -315,7 +314,7 @@ internal fun PrintingRow(printing: Printing, modifier: Modifier = Modifier) {
         PrintingImage(printing.imageUrl, Modifier.width(64.dp))
         Column(Modifier.weight(1f)) {
             Text(printing.name, style = MaterialTheme.typography.titleMedium)
-            val variant = OnePiece.variantOf(printing.identifier)?.label().orEmpty()
+            val variant = printing.variant?.label().orEmpty()
             Text(
                 listOf(printing.baseNumber, variant, printing.rarity, printing.releaseProduct)
                     .filter { it.isNotBlank() }.joinToString(" · "),

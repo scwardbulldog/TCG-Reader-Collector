@@ -57,6 +57,7 @@ class CustomPrintingsTest {
         assertEquals("Custom", printing.releaseProduct)
         assertEquals("", printing.imageUrl)
         assertEquals("", printing.rarity)
+        assertNull(printing.variant)
         assertEquals(PrintingIdentifier(Game.OnePiece, Language.English, "custom:id0"), printing.identifier)
         assertTrue(printing.identifier.isCustom)
         assertFailsWith<IllegalArgumentException> { create(label = "  ") }
@@ -118,6 +119,20 @@ class CustomPrintingsTest {
             "onepiece,EN,OP01-001,onepiece / EN / custom:id0,Milk Box Stamp,,Custom,Near Mint,,",
             lines[1],
         )
+    }
+
+    @Test
+    fun `a Variant filter excludes a Custom Printing, which has no Variant`() = runTest {
+        source.publish(Game.OnePiece, Language.English, "v1", catalogJson("en", "OP01-001" to "Roronoa Zoro"))
+        updater.update()
+        val catalogued = PrintingIdentifier(Game.OnePiece, Language.English, "OP01-001")
+        val printing = create()
+        collection.add(NewOwnedCopy(catalogued))
+        collection.add(NewOwnedCopy(printing.identifier))
+
+        val rows = CollectionList(collection, catalog).rows(filter = CollectionFilter(variant = tcg.domain.Variant.Normal))
+
+        assertEquals(listOf(catalogued), rows.map { it.printing })
     }
 
     @Test

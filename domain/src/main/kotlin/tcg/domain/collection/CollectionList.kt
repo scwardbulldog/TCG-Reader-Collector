@@ -8,7 +8,6 @@ import tcg.domain.LocationId
 import tcg.domain.Printing
 import tcg.domain.PrintingIdentifier
 import tcg.domain.Variant
-import tcg.domain.onepiece.OnePiece
 
 /** One Collection list row: a Printing and how many Owned Copies of it exist. */
 data class CollectionRow(
@@ -61,7 +60,7 @@ class CollectionList(private val collection: CollectionStore, catalog: CatalogSt
         val details = entry?.printing
         if (filter.language != null && printing.language != filter.language) return null
         if (filter.releaseProduct != null && details?.releaseProduct != filter.releaseProduct) return null
-        if (filter.variant != null && (details == null || OnePiece.variantOf(printing) != filter.variant)) return null
+        if (filter.variant != null && (details == null || details.variant != filter.variant)) return null
         val copies = if (filter.location == null) count else collection.ownedCopies(printing).count { it.location == filter.location }
         return if (copies == 0) null else CollectionRow(printing, details, copies, entry?.noLongerInCatalog ?: false)
     }

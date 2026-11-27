@@ -8,6 +8,7 @@ import tcg.domain.Language
 import tcg.domain.Location
 import tcg.domain.Printing
 import tcg.domain.PrintingIdentifier
+import tcg.domain.fixtureVariant
 import tcg.domain.catalog.InMemoryCatalogStore
 import tcg.domain.collection.InMemoryCollectionStore
 import kotlin.test.Test
@@ -26,7 +27,7 @@ class ScanSessionInputTest {
         name: String = "Roronoa Zoro",
         baseNumber: String = "OP01-001",
         language: Language = Language.English,
-    ) = Printing(PrintingIdentifier(Game.OnePiece, language, sourceId), baseNumber, "Product $sourceId", "L", name, "")
+    ) = Printing(PrintingIdentifier(Game.OnePiece, language, sourceId), baseNumber, "Product $sourceId", "L", name, "", fixtureVariant(sourceId))
 
     private suspend fun seed(language: Language, vararg printings: Printing) =
         catalog.replaceCatalog(Game.OnePiece, language, printings.toList())

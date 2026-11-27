@@ -8,6 +8,7 @@ import tcg.domain.Printing
 import tcg.domain.PrintingIdentifier
 import tcg.domain.Variant
 import tcg.domain.catalog.InMemoryCatalogStore
+import tcg.domain.fixtureVariant
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
@@ -30,7 +31,7 @@ class CollectionListTest {
     ): PrintingIdentifier {
         val identifier = id(language, sourceId)
         catalogued[language] = catalogued[language].orEmpty() +
-            Printing(identifier, baseNumber, releaseProduct, "L", name, "https://example.invalid/$sourceId.png")
+            Printing(identifier, baseNumber, releaseProduct, "L", name, "https://example.invalid/$sourceId.png", fixtureVariant(sourceId))
         catalog.replaceCatalog(Game.OnePiece, language, catalogued.getValue(language))
         repeat(copies) { collection.add(NewOwnedCopy(identifier)) }
         return identifier
@@ -106,7 +107,7 @@ class CollectionListTest {
     }
 
     @Test
-    fun `the Variant filter matches the Variant derived from the Printing identifier`() = runTest {
+    fun `the Variant filter matches the published Variant`() = runTest {
         own(Language.English, "OP01-001", "OP01-001", "Roronoa Zoro")
         val alt = own(Language.English, "OP01-001_p1", "OP01-001", "Roronoa Zoro")
         val reprint = own(Language.English, "OP01-001_r1", "OP01-001", "Roronoa Zoro")

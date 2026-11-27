@@ -47,7 +47,7 @@ import tcg.domain.PrintingIdentifier
 import tcg.domain.Variant
 import tcg.domain.collection.CollectionRow
 import tcg.domain.collection.CustomPrintings
-import tcg.domain.onepiece.OnePiece
+import tcg.domain.isCustom
 
 /** What the Collection list can start. */
 class CollectionActions(
@@ -201,7 +201,7 @@ private fun EmptyState(message: String) {
 
 @Composable
 private fun CollectionRowItem(row: CollectionRow, onClick: () -> Unit) {
-    val variant = row.details?.let { OnePiece.variantOf(row.printing)?.label() ?: CustomPrintings.RELEASE_PRODUCT }
+    val variant = row.details?.let { if (row.printing.isCustom) CustomPrintings.RELEASE_PRODUCT else it.variant?.label() }
     Row(
         Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 12.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp),

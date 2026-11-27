@@ -8,6 +8,7 @@ import tcg.domain.Language
 import tcg.domain.NewOwnedCopy
 import tcg.domain.Printing
 import tcg.domain.PrintingIdentifier
+import tcg.domain.Variant
 
 /** Debug-only sample Collection, for trying the UI before scanning and the Catalog download are usable. */
 object SampleData {
@@ -21,6 +22,7 @@ object SampleData {
         name: String,
         rarity: String = "L",
         releaseProduct: String = ROMANCE_DAWN,
+        variant: Variant = Variant.Normal,
     ) = Printing(
         identifier = PrintingIdentifier(Game.OnePiece, language, sourceId),
         baseNumber = sourceId.substringBefore('_'),
@@ -28,13 +30,14 @@ object SampleData {
         rarity = rarity,
         name = name,
         imageUrl = "",
+        variant = variant,
     )
 
     private val sampleCatalog = mapOf(
         Language.English to listOf(
             printing(Language.English, "OP01-001", "Roronoa Zoro"),
-            printing(Language.English, "OP01-001_p1", "Roronoa Zoro"),
-            printing(Language.English, "OP02-013_r1", "Portgas.D.Ace", "SR", PREMIUM_BOOSTER),
+            printing(Language.English, "OP01-001_p1", "Roronoa Zoro", variant = Variant.AlternateArt),
+            printing(Language.English, "OP02-013_r1", "Portgas.D.Ace", "SR", PREMIUM_BOOSTER, Variant.Reprint),
             printing(Language.English, "OP01-016", "Nami", "R"),
             printing(Language.English, "OP02-013", "Portgas.D.Ace", "SR", PARAMOUNT_WAR),
         ),

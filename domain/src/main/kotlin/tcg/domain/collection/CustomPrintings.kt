@@ -32,6 +32,7 @@ class CustomPrintings(
             rarity = "",
             name = name,
             imageUrl = "",
+            variant = null,
         )
         collection.rememberPrintings(listOf(printing))
         return printing

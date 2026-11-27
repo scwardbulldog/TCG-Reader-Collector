@@ -7,6 +7,7 @@ import tcg.domain.Language
 import tcg.domain.NewOwnedCopy
 import tcg.domain.Printing
 import tcg.domain.PrintingIdentifier
+import tcg.domain.fixtureVariant
 import tcg.domain.catalog.InMemoryCatalogStore
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -20,7 +21,7 @@ class CollectionExportTest {
     private val unknown = PrintingIdentifier(Game.OnePiece, Language.Japanese, "OP05-007")
 
     private fun printing(id: PrintingIdentifier, baseNumber: String, name: String) =
-        Printing(id, baseNumber, "Romance Dawn", "L", name, "")
+        Printing(id, baseNumber, "Romance Dawn", "L", name, "", fixtureVariant(id.sourceId))
 
     @Test
     fun `exports every Owned Copy with Location names, last-known details and blanks for Unresolved Printings`() = runTest {

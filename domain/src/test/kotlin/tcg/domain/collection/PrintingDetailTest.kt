@@ -8,6 +8,7 @@ import tcg.domain.NewOwnedCopy
 import tcg.domain.OwnedCopyId
 import tcg.domain.Printing
 import tcg.domain.PrintingIdentifier
+import tcg.domain.Variant
 import tcg.domain.catalog.InMemoryCatalogStore
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -22,7 +23,7 @@ class PrintingDetailTest {
 
     @Test
     fun `lists only the Owned Copies of its Printing with the Catalog entry and Locations`() = runTest {
-        val entry = Printing(zoro, "OP01-001", "Romance Dawn", "L", "Roronoa Zoro", "https://example.invalid/z.png")
+        val entry = Printing(zoro, "OP01-001", "Romance Dawn", "L", "Roronoa Zoro", "https://example.invalid/z.png", Variant.Normal)
         catalog.replaceCatalog(Game.OnePiece, Language.English, listOf(entry))
         val first = collection.add(NewOwnedCopy(zoro))
         val second = collection.add(NewOwnedCopy(zoro))

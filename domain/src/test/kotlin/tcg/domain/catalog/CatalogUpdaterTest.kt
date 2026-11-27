@@ -5,6 +5,8 @@ import tcg.domain.Game
 import tcg.domain.Language
 import tcg.domain.Printing
 import tcg.domain.PrintingIdentifier
+import tcg.domain.Variant
+import tcg.domain.fixtureVariant
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
@@ -37,6 +39,7 @@ class CatalogUpdaterTest {
                 rarity = "L",
                 name = "Roronoa Zoro",
                 imageUrl = "https://example.invalid/OP01-001_p1.png",
+                variant = Variant.AlternateArt,
             ),
             store.find(PrintingIdentifier(Game.OnePiece, Language.English, "OP01-001_p1")),
         )
@@ -46,6 +49,46 @@ class CatalogUpdaterTest {
         )
         assertEquals("v1", store.catalogVersion(Game.OnePiece, Language.English))
         assertEquals("v1", store.catalogVersion(Game.OnePiece, Language.Japanese))
+    }
+
+    @Test
+    fun `a schemaVersion 2 file carries Variant, Rarity, Product code and Treatments into the Printing`() = runTest {
+        source.publish(
+            Game.OnePiece, Language.English, "v1",
+            """{"schemaVersion":2,"game":"onepiece","language":"en","generatedAt":"2026-01-01T00:00:00.000Z","printings":[
+                {"id":"OP01-001","baseNumber":"OP01-001","variant":"normal","name":"Roronoa Zoro","imageUrl":"https://example.invalid/a.png","releaseProduct":"ROMANCE DAWN [OP-01]","rarity":"L","productCode":"OP-01"},
+                {"id":"OP01-001_p1","baseNumber":"OP01-001","variant":"alternate-art","name":"Roronoa Zoro","imageUrl":"https://example.invalid/b.png","releaseProduct":"ROMANCE DAWN [OP-01]","rarity":"L","productCode":"OP-01","treatments":["Parallel","Manga"]},
+                {"id":"OP01-001_r1","baseNumber":"OP01-001","variant":"reprint","name":"Roronoa Zoro","imageUrl":"https://example.invalid/c.png","releaseProduct":"Event Pack Vol.5","rarity":"SP CARD"}
+            ]}""",
+        )
+
+        updater.update()
+
+        suspend fun find(id: String) = store.find(PrintingIdentifier(Game.OnePiece, Language.English, id))!!
+        assertEquals(Variant.Normal, find("OP01-001").variant)
+        assertEquals("OP-01", find("OP01-001").productCode)
+        assertEquals(null, find("OP01-001").treatments)
+        assertEquals(Variant.AlternateArt, find("OP01-001_p1").variant)
+        assertEquals(listOf("Parallel", "Manga"), find("OP01-001_p1").treatments)
+        assertEquals(Variant.Reprint, find("OP01-001_r1").variant)
+        assertEquals("SP CARD", find("OP01-001_r1").rarity)
+        assertEquals(null, find("OP01-001_r1").productCode)
+    }
+
+    @Test
+    fun `the Variant is read from the field, not from the ID suffix`() = runTest {
+        source.publish(
+            Game.OnePiece, Language.English, "v1",
+            """{"schemaVersion":2,"game":"onepiece","language":"en","generatedAt":"2026-01-01T00:00:00.000Z","printings":[
+                {"id":"OP01-001_p1@569901","baseNumber":"OP01-001","variant":"normal","name":"Zoro","imageUrl":"","releaseProduct":"P","rarity":"L"},
+                {"id":"OP01-002","baseNumber":"OP01-002","variant":"reprint","name":"Law","imageUrl":"","releaseProduct":"P","rarity":"L"}
+            ]}""",
+        )
+
+        updater.update()
+
+        assertEquals(Variant.Normal, store.find(PrintingIdentifier(Game.OnePiece, Language.English, "OP01-001_p1@569901"))?.variant)
+        assertEquals(Variant.Reprint, store.find(PrintingIdentifier(Game.OnePiece, Language.English, "OP01-002"))?.variant)
     }
 
     @Test
@@ -102,7 +145,10 @@ class CatalogUpdaterTest {
         val bad = listOf(
             catalogJson("en", "OP01-001_p1" to "Zoro v2").dropLast(40),
             catalogJson("jp", "OP01-001_p1" to "Wrong language"),
-            catalogJson("en", "OP01-001_p1" to "Zoro v2").replace("\"schemaVersion\":1", "\"schemaVersion\":2"),
+            catalogJson("en", "OP01-001_p1" to "Zoro v2").replace("\"schemaVersion\":2", "\"schemaVersion\":1"),
+            catalogJson("en", "OP01-001_p1" to "Zoro v2").replace("\"schemaVersion\":2", "\"schemaVersion\":3"),
+            catalogJson("en", "OP01-001_p1" to "Zoro v2").replace("\"variant\":\"alternate-art\"", "\"variant\":\"holo\""),
+            catalogJson("en", "OP01-001_p1" to "Zoro v2").replace("\"variant\":\"alternate-art\",", ""),
             catalogJson("en"),
             catalogJson("en", "OP01-001_p1" to "a", "OP01-001_p1" to "b"),
         )
@@ -119,9 +165,15 @@ class CatalogUpdaterTest {
     }
 }
 
+/** A schemaVersion 2 file. The pipeline publishes `variant`; this fixture stands in for it. */
 fun catalogJson(language: String, vararg printings: Pair<String, String>): String {
     val entries = printings.joinToString(",") { (id, name) ->
-        """{"id":"$id","baseNumber":"${id.substringBefore('_')}","releaseProduct":"Romance Dawn","rarity":"L","name":"$name","imageUrl":"https://example.invalid/$id.png"}"""
+        val variant = when (fixtureVariant(id)) {
+            Variant.Normal -> "normal"
+            Variant.AlternateArt -> "alternate-art"
+            Variant.Reprint -> "reprint"
+        }
+        """{"id":"$id","baseNumber":"${id.substringBefore('_')}","variant":"$variant","releaseProduct":"Romance Dawn","rarity":"L","name":"$name","imageUrl":"https://example.invalid/$id.png"}"""
     }
-    return """{"schemaVersion":1,"game":"onepiece","language":"$language","generatedAt":"2026-01-01T00:00:00.000Z","printings":[$entries]}"""
+    return """{"schemaVersion":2,"game":"onepiece","language":"$language","generatedAt":"2026-01-01T00:00:00.000Z","printings":[$entries]}"""
 }

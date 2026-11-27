@@ -8,6 +8,7 @@ import tcg.domain.Game
 import tcg.domain.Language
 import tcg.domain.NewOwnedCopy
 import tcg.domain.PrintingIdentifier
+import tcg.domain.Variant
 import tcg.domain.collection.InMemoryCollectionStore
 import java.io.IOException
 import java.time.Instant
@@ -68,7 +69,7 @@ class CollectionBackupTest {
     fun `restore drops last-known Printing details so nothing is invented for an Unresolved Printing`() = runTest {
         seed()
         collection.rememberPrintings(
-            listOf(tcg.domain.Printing(zoro, "OP01-001", "Romance Dawn", "L", "Roronoa Zoro", "u")),
+            listOf(tcg.domain.Printing(zoro, "OP01-001", "Romance Dawn", "L", "Roronoa Zoro", "u", Variant.Normal)),
         )
         val content = backUp()
 

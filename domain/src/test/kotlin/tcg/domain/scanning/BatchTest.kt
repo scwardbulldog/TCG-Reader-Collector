@@ -6,6 +6,7 @@ import tcg.domain.Game
 import tcg.domain.Language
 import tcg.domain.Printing
 import tcg.domain.PrintingIdentifier
+import tcg.domain.fixtureVariant
 import tcg.domain.catalog.InMemoryCatalogStore
 import tcg.domain.collection.InMemoryCollectionStore
 import kotlin.test.Test
@@ -18,7 +19,7 @@ class BatchTest {
     private val collection = InMemoryCollectionStore()
 
     private fun printing(sourceId: String, baseNumber: String = sourceId.substringBefore('_')) =
-        Printing(PrintingIdentifier(Game.OnePiece, Language.English, sourceId), baseNumber, "Product", "L", "Card $sourceId", "")
+        Printing(PrintingIdentifier(Game.OnePiece, Language.English, sourceId), baseNumber, "Product", "L", "Card $sourceId", "", fixtureVariant(sourceId))
 
     private suspend fun batch(vararg printings: Printing): Batch {
         catalog.replaceCatalog(Game.OnePiece, Language.English, printings.toList())

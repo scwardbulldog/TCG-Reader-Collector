@@ -123,6 +123,8 @@ private fun KnownPrintingEntity.toDomain() = Printing(
     rarity = rarity,
     name = name,
     imageUrl = imageUrl,
+    // Variant, Product code and Treatments are not stored until the v2 Room migration (slice E).
+    variant = null,
 )
 
 private fun OwnedCopyEntity.toDomain() = OwnedCopy(

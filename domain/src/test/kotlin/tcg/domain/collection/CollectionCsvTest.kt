@@ -8,6 +8,7 @@ import tcg.domain.OwnedCopy
 import tcg.domain.OwnedCopyId
 import tcg.domain.Printing
 import tcg.domain.PrintingIdentifier
+import tcg.domain.Variant
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
@@ -15,7 +16,7 @@ class CollectionCsvTest {
     private val header = "Game,Language,Base Number,Printing identifier,Name,Variant,Release Product,Condition,Location,Notes"
 
     private val zoro = PrintingIdentifier(Game.OnePiece, Language.English, "OP01-001_p1")
-    private val zoroDetails = Printing(zoro, "OP01-001", "Romance Dawn", "L", "Roronoa Zoro", "https://example.test/zoro.png")
+    private val zoroDetails = Printing(zoro, "OP01-001", "Romance Dawn", "L", "Roronoa Zoro", "https://example.test/zoro.png", Variant.AlternateArt)
 
     private fun copy(
         id: Long,

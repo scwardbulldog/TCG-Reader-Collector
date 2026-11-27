@@ -166,6 +166,7 @@ object BackupFormat {
                 rarity = "",
                 name = entry.label,
                 imageUrl = "",
+                variant = null,
             )
         }
         if (customPrintings.map { it.identifier }.toSet().size != customPrintings.size) {

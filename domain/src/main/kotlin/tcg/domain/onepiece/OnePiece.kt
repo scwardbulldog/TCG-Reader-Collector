@@ -1,24 +1,7 @@
 package tcg.domain.onepiece
 
-import tcg.domain.PrintingIdentifier
-import tcg.domain.Variant
-import tcg.domain.isCustom
-
-/** One Piece-specific rules. Other Games do not inherit Bandai's suffix meanings. */
+/** One Piece-specific rules. Other Games do not inherit Bandai's conventions. */
 object OnePiece {
-    private val alternateArtSuffix = Regex("_p\\d+$")
-    private val reprintSuffix = Regex("_r\\d+$")
-
-    fun variantOf(sourceId: String): Variant = when {
-        alternateArtSuffix.containsMatchIn(sourceId) -> Variant.AlternateArt
-        reprintSuffix.containsMatchIn(sourceId) -> Variant.Reprint
-        else -> Variant.Normal
-    }
-
-    /** The Variant of a Printing; null for a Custom Printing, which the collector named and which has none. */
-    fun variantOf(identifier: PrintingIdentifier): Variant? =
-        if (identifier.isCustom) null else variantOf(identifier.sourceId)
-
     // OCR often swaps look-alike characters, so digit positions also accept letters that resemble digits.
     private const val DIGIT = "[0-9OQDIL|!SBZ]"
     private const val SEPARATOR = "\\s*[-\u2010\u2011\u2012\u2013\u2014\u2015\u2212~_=.]?\\s*"

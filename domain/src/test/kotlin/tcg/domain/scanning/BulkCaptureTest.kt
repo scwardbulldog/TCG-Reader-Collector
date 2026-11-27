@@ -10,6 +10,7 @@ import tcg.domain.Printing
 import tcg.domain.PrintingIdentifier
 import tcg.domain.catalog.InMemoryCatalogStore
 import tcg.domain.collection.InMemoryCollectionStore
+import tcg.domain.fixtureVariant
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
@@ -20,6 +21,7 @@ class BulkCaptureTest {
 
     private fun printing(sourceId: String) = Printing(
         PrintingIdentifier(Game.OnePiece, Language.English, sourceId), sourceId.substringBefore('_'), "Product", "L", "Card $sourceId", "",
+        fixtureVariant(sourceId),
     )
 
     private suspend fun batch(vararg printings: Printing): Batch {

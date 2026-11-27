@@ -45,7 +45,6 @@ import tcg.domain.LocationId
 import tcg.domain.OwnedCopy
 import tcg.domain.PrintingIdentifier
 import tcg.domain.isCustom
-import tcg.domain.onepiece.OnePiece
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -81,7 +80,7 @@ fun PrintingDetailScreen(
                 printing.language.label(),
                 entry?.rarity,
                 entry?.releaseProduct,
-                entry?.let { OnePiece.variantOf(printing)?.label() },
+                entry?.variant?.label(),
             )
             Row(
                 Modifier.padding(horizontal = 16.dp, vertical = 8.dp),

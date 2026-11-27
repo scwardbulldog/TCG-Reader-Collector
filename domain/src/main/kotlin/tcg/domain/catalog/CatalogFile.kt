@@ -6,12 +6,13 @@ import tcg.domain.Game
 import tcg.domain.Language
 import tcg.domain.Printing
 import tcg.domain.PrintingIdentifier
+import tcg.domain.Variant
 
 class CatalogFormatException(message: String, cause: Throwable? = null) : Exception(message, cause)
 
 /** Reads a published Catalog file (docs/catalog-format.md) into Printings, rejecting anything unexpected. */
 internal object CatalogFile {
-    private const val SUPPORTED_SCHEMA_VERSION = 1
+    private const val SUPPORTED_SCHEMA_VERSION = 2
     private val json = Json { ignoreUnknownKeys = true }
 
     @Serializable
@@ -27,9 +28,12 @@ internal object CatalogFile {
         val id: String,
         val baseNumber: String,
         val releaseProduct: String,
+        val variant: String,
         val rarity: String,
         val name: String,
         val imageUrl: String,
+        val productCode: String? = null,
+        val treatments: List<String>? = null,
     )
 
     fun parse(target: CatalogTarget, content: String): List<Printing> {
@@ -56,8 +60,18 @@ internal object CatalogFile {
                 rarity = it.rarity,
                 name = it.name,
                 imageUrl = it.imageUrl,
+                variant = variant(it.id, it.variant),
+                productCode = it.productCode,
+                treatments = it.treatments?.takeIf(List<String>::isNotEmpty),
             )
         }
+    }
+
+    private fun variant(id: String, code: String) = when (code) {
+        "normal" -> Variant.Normal
+        "alternate-art" -> Variant.AlternateArt
+        "reprint" -> Variant.Reprint
+        else -> throw CatalogFormatException("Printing $id has an unknown variant \"$code\"")
     }
 
     private fun Game.fileCode() = when (this) {

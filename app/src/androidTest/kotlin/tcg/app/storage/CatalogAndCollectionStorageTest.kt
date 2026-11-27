@@ -290,5 +290,6 @@ class CatalogAndCollectionStorageTest {
         rarity = "L",
         name = "Roronoa Zoro",
         imageUrl = "https://example.invalid/${id.sourceId}.png",
+        variant = null,
     )
 }
