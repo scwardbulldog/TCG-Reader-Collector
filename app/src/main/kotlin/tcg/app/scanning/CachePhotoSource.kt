@@ -86,7 +86,7 @@ class CachePhotoSource(
 
     companion object {
         private const val FOLDER = "bulk-add"
-        private const val MAX_EDGE = 2560
+        private const val MAX_EDGE = 4096
         private const val THUMBNAIL_WIDTH = 120
 
         private fun folderIn(context: Context) = File(context.cacheDir, FOLDER)
