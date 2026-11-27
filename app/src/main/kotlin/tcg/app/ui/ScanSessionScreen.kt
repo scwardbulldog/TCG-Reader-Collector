@@ -155,7 +155,12 @@ private fun InputForm(viewModel: ScanViewModel) {
                 )
             }
         }
-        viewModel.lastAdded?.let { Text(it, color = MaterialTheme.colorScheme.primary) }
+        viewModel.lastAdded?.let { last ->
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(last.message, color = MaterialTheme.colorScheme.primary, modifier = Modifier.weight(1f))
+                TextButton(onClick = viewModel::undoLastAdd) { Text("Undo") }
+            }
+        }
         // A search hides the camera at once; a re-lookup under an open confirmation keeps it bound.
         val searchingHere = viewModel.searching && viewModel.confirmation == null
         if ((bulkMode || (result !is ScanInputResult.SearchResults && !searchingHere)) && !(bulkMode && viewModel.reviewing)) {
@@ -261,6 +266,7 @@ private fun InputForm(viewModel: ScanViewModel) {
 @Composable
 private fun ConfirmationForm(viewModel: ScanViewModel, confirmation: Confirmation) {
     var customDialog by remember { mutableStateOf(false) }
+    LaunchedEffect(confirmation.candidates) { viewModel.loadOwned() }
     Column(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text(
             if (confirmation.candidates.size == 1) "Check this is your card, then tap Add."
@@ -276,7 +282,7 @@ private fun ConfirmationForm(viewModel: ScanViewModel, confirmation: Confirmatio
                         containerColor = if (selected) MaterialTheme.colorScheme.primaryContainer
                         else MaterialTheme.colorScheme.surfaceVariant,
                     ),
-                ) { PrintingRow(printing) }
+                ) { PrintingRow(printing, owned = viewModel.owned[printing.identifier] ?: 0) }
             }
         }
         TextButton(onClick = { customDialog = true }) { Text("Not listed? Create custom Printing") }
@@ -292,26 +298,26 @@ private fun ConfirmationForm(viewModel: ScanViewModel, confirmation: Confirmatio
                 },
             )
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
             OutlinedButton(onClick = { viewModel.setCount(confirmation.count - 1) }) { Text("−") }
             Text("${confirmation.count}", style = MaterialTheme.typography.titleLarge)
             OutlinedButton(onClick = { viewModel.setCount(confirmation.count + 1) }) { Text("+") }
+            val have = confirmation.selected?.let { viewModel.owned[it.identifier] } ?: 0
+            if (have > 0) Text("You have ×$have", color = MaterialTheme.colorScheme.primary)
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Picker(
-                label = "Condition",
-                value = confirmation.condition.label(),
-                options = Condition.entries.map { it.label() to { viewModel.overrideCondition(it) } },
-                modifier = Modifier.weight(1f),
-            )
-            LocationPicker(
-                viewModel,
-                confirmation.location,
-                onChoose = viewModel::chooseLocation,
-                forBatch = false,
-                modifier = Modifier.weight(1f),
-            )
-        }
+        Picker(
+            label = "Condition",
+            value = confirmation.condition.label(),
+            options = Condition.entries.map { it.label() to { viewModel.overrideCondition(it) } },
+            modifier = Modifier.fillMaxWidth(),
+        )
+        LocationPicker(
+            viewModel,
+            confirmation.location,
+            onChoose = viewModel::chooseLocation,
+            forBatch = false,
+            modifier = Modifier.fillMaxWidth(),
+        )
         Button(
             onClick = viewModel::confirm,
             enabled = confirmation.selected != null,
@@ -341,7 +347,7 @@ internal fun CardMatchRow(card: CardMatch, modifier: Modifier = Modifier) {
 
 /** Alternate Arts differ by artwork, so the row shows the Release Product and rarity that tell them apart. */
 @Composable
-internal fun PrintingRow(printing: Printing, modifier: Modifier = Modifier) {
+internal fun PrintingRow(printing: Printing, modifier: Modifier = Modifier, owned: Int = 0) {
     Row(
         modifier.fillMaxWidth().padding(12.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -356,6 +362,7 @@ internal fun PrintingRow(printing: Printing, modifier: Modifier = Modifier) {
                     .filter { it.isNotBlank() }.joinToString(" · "),
                 style = MaterialTheme.typography.bodyMedium,
             )
+            if (owned > 0) Text("You have ×$owned", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary)
         }
     }
 }

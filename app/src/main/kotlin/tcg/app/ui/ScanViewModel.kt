@@ -17,7 +17,9 @@ import tcg.domain.Condition
 import tcg.domain.Game
 import tcg.domain.Language
 import tcg.domain.Location
+import tcg.domain.OwnedCopy
 import tcg.domain.Printing
+import tcg.domain.PrintingIdentifier
 import tcg.domain.scanning.BaseNumberLocker
 import tcg.domain.scanning.BaseNumberRead
 import tcg.domain.scanning.Batch
@@ -42,6 +44,9 @@ data class Confirmation(
     val count: Int = 1,
     val condition: Condition = Condition.NearMint,
 )
+
+/** The "Added …" message and the Owned Copies that add created. */
+data class LastAdded(val message: String, val copies: List<OwnedCopy>)
 
 /** Single confirms each scan; Bulk snaps a stack of cards and reviews them once. */
 enum class ScanMode { Single, Bulk }
@@ -114,9 +119,27 @@ class ScanViewModel(
         private set
     private var justCreated: Printing? = null
 
-    /** The last add, shown on the input screen so the collector sees it landed. */
-    var lastAdded by mutableStateOf<String?>(null)
+    /** The last add, shown on the input screen so the collector sees it landed, with the copies [undoLastAdd] removes. */
+    var lastAdded by mutableStateOf<LastAdded?>(null)
         private set
+
+    /** How many Owned Copies the Collection holds of each Printing in the open confirmation. */
+    var owned by mutableStateOf<Map<PrintingIdentifier, Int>>(emptyMap())
+        private set
+
+    fun loadOwned() {
+        val candidates = confirmation?.candidates ?: return
+        val current = sessionInput
+        viewModelScope.launch { owned = current.ownedCounts(candidates) }
+    }
+
+    /** Removes the copies the last add created. */
+    fun undoLastAdd() {
+        val last = lastAdded ?: return
+        val current = sessionInput
+        lastAdded = null
+        viewModelScope.launch { current.undo(last.copies) }
+    }
 
     fun loadLocations() {
         viewModelScope.launch { locations = collection.locations() }
@@ -224,6 +247,7 @@ class ScanViewModel(
     fun selectMode(selected: ScanMode) {
         val input = sessionInput
         if (selected == mode) return
+        lastAdded = null
         when (selected) {
             ScanMode.Bulk -> {
                 bulkLocation = input.session.location
@@ -289,7 +313,7 @@ class ScanViewModel(
         val capture = bulk ?: return
         viewModelScope.launch {
             val added = capture.addAll(bulkLocation)
-            lastAdded = "Added ${added.size} ${if (added.size == 1) "card" else "cards"} from Bulk Add"
+            lastAdded = LastAdded("Added ${added.size} ${if (added.size == 1) "card" else "cards"} from Bulk Add", added)
             if (capture.rows.value.isEmpty()) reviewing = false
         }
     }
@@ -321,6 +345,7 @@ class ScanViewModel(
 
     private fun leaveBulk() {
         closeBulk()
+        lastAdded = null
         mode = ScanMode.Single
     }
 
@@ -458,7 +483,7 @@ class ScanViewModel(
         viewModelScope.launch {
             val added = current.add(printing, pending.count, pending.condition, pending.location)
             if (justCreated?.identifier == printing.identifier) justCreated = null else discardUnusedCustomPrinting()
-            lastAdded = "Added ${added.size} × ${printing.name} (${printing.baseNumber})"
+            lastAdded = LastAdded("Added ${added.size} × ${printing.name} (${printing.baseNumber})", added)
             clearInput()
         }
     }

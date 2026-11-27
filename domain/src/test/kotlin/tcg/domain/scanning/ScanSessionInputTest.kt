@@ -65,6 +65,35 @@ class ScanSessionInputTest {
     }
 
     @Test
+    fun `a Base Number typed without its hyphen matches as printed`() = runTest {
+        val zoro = printing("OP01-001")
+        val promo = printing("P-113", baseNumber = "P-113")
+        seed(Language.English, zoro, promo)
+        val (entry) = entry()
+
+        assertEquals(ScanLookup.Candidates(listOf(zoro), zoro), entry.lookup("OP01001"))
+        assertEquals(ScanLookup.Candidates(listOf(zoro), zoro), entry.lookup("op01001"))
+        assertEquals(ScanLookup.Candidates(listOf(promo), promo), entry.lookup("p113"))
+        assertEquals(ScanLookup.Candidates(listOf(promo), promo), entry.lookup("P-113"))
+    }
+
+    @Test
+    fun `owned counts cover only Printings the Collection holds and undo removes just the copies added`() = runTest {
+        val zoro = printing("OP01-001")
+        val altArt = printing("OP01-001_p1")
+        seed(Language.English, zoro, altArt)
+        val (entry) = entry()
+        entry.add(zoro)
+        val added = entry.add(zoro, count = 2)
+
+        assertEquals(mapOf(zoro.identifier to 3), entry.ownedCounts(listOf(zoro, altArt)))
+
+        entry.undo(added)
+
+        assertEquals(mapOf(zoro.identifier to 1), entry.ownedCounts(listOf(zoro, altArt)))
+    }
+
+    @Test
     fun `several matches are listed Normal first with nothing preselected or added`() = runTest {
         val normal = printing("OP01-001")
         val altArt = printing("OP01-001_p1")

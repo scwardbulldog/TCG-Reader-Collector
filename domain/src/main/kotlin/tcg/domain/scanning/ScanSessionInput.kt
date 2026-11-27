@@ -8,6 +8,8 @@ import tcg.domain.Location
 import tcg.domain.OwnedCopy
 import tcg.domain.NewOwnedCopy
 import tcg.domain.Printing
+import tcg.domain.PrintingIdentifier
+import tcg.domain.onepiece.OnePiece
 import tcg.domain.collection.Cards
 import tcg.domain.collection.CustomPrintings
 import tcg.domain.collection.PrintingTitle
@@ -57,7 +59,7 @@ class ScanSessionInput(
 
     suspend fun lookup(baseNumber: String): ScanLookup {
         val typed = baseNumber.trim()
-        val base = typed.uppercase()
+        val base = OnePiece.typedBaseNumber(typed) ?: typed.uppercase()
         val language = session.language // read once: a switch mid-lookup must not mix Languages
         val printings = (
             catalog.findByBaseNumber(session.game, language, base) +
@@ -103,6 +105,17 @@ class ScanSessionInput(
                 imageUrl = printings.firstOrNull { it.imageUrl.isNotBlank() }?.imageUrl.orEmpty(),
             )
         }
+    }
+
+    /** How many Owned Copies the Collection holds of each of [printings]; absent means none. */
+    suspend fun ownedCounts(printings: Collection<Printing>): Map<PrintingIdentifier, Int> {
+        val counts = collection.countsByPrinting()
+        return printings.map { it.identifier }.filter { it in counts }.associateWith { counts.getValue(it) }
+    }
+
+    /** Removes [copies] just added, leaving the Collection as it was before the add. */
+    suspend fun undo(copies: List<OwnedCopy>) {
+        copies.forEach { collection.delete(it.id) }
     }
 
     /**
