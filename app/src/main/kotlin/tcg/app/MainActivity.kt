@@ -30,6 +30,7 @@ import kotlinx.coroutines.withContext
 import tcg.app.catalog.GitHubCatalogSource
 import tcg.app.catalog.summary
 import tcg.app.scanning.CachePhotoSource
+import tcg.app.scanning.SharedPreferencesLanguageStore
 import tcg.app.storage.AppDatabase
 import tcg.app.ui.BackupViewModel
 import tcg.app.ui.CollectionActions
@@ -208,9 +209,10 @@ private fun CollectionApp(
     val context = LocalContext.current
 
     val photos = remember { CachePhotoSource(context.applicationContext) }
+    val languages = remember { SharedPreferencesLanguageStore(context) }
 
     if (scanning) {
-        val scanViewModel = viewModel<ScanViewModel>(initializer = { ScanViewModel(catalog, collection, photos) })
+        val scanViewModel = viewModel<ScanViewModel>(initializer = { ScanViewModel(catalog, collection, photos, languages) })
         val close = {
             if (scanViewModel.requestEnd()) scanning = false
         }

@@ -16,9 +16,10 @@ import tcg.domain.catalog.FakeCatalogSource
 import tcg.domain.catalog.InMemoryCatalogStore
 import tcg.domain.catalog.catalogJson
 import tcg.domain.isCustom
+import tcg.domain.scanning.InMemoryLanguageStore
 import tcg.domain.scanning.ScanLookup
+import tcg.domain.scanning.ScanSession
 import tcg.domain.scanning.ScanSessionInput
-import tcg.domain.scanning.ScanSetup
 import java.time.Instant
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -41,10 +42,8 @@ class CustomPrintingsTest {
     private var ids = 0
     private val custom = CustomPrintings(collection, newId = { "id${ids++}" })
 
-    private suspend fun session(language: Language = Language.English): ScanSessionInput {
-        val setup = ScanSetup(language = language, location = collection.createLocation("Binder"))
-        return ScanSessionInput(setup.start()!!, catalog, collection)
-    }
+    private fun session(language: Language = Language.English): ScanSessionInput =
+        ScanSessionInput(ScanSession(Game.OnePiece, InMemoryLanguageStore(language)), catalog, collection)
 
     private suspend fun create(base: String = "OP01-001", label: String = "Milk Box Stamp") =
         custom.create(Game.OnePiece, Language.English, base, label)

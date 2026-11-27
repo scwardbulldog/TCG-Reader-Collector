@@ -12,6 +12,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.sync.withPermit
+import tcg.domain.Location
 import tcg.domain.OwnedCopy
 import tcg.domain.Printing
 
@@ -70,8 +71,8 @@ class BulkCapture(
 
     suspend fun remove(id: BatchRowId) = fix { batch.remove(id) }
 
-    /** Adds every resolved row to the Collection; flagged rows stay for the collector. */
-    suspend fun addAll(): List<OwnedCopy> = fix { batch.addAll() }
+    /** Adds every resolved row to the Collection in [location]; flagged rows stay for the collector. */
+    suspend fun addAll(location: Location?): List<OwnedCopy> = fix { batch.addAll(location) }
 
     private suspend fun <T> fix(change: suspend () -> T): T = lock.withLock {
         val before = batch.rows.sumOf { it.count }

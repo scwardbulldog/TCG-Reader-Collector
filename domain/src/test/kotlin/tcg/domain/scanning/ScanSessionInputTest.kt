@@ -33,11 +33,10 @@ class ScanSessionInputTest {
 
     private suspend fun entry(
         language: Language = Language.English,
-        condition: Condition = Condition.NearMint,
         catalog: CatalogStore = this.catalog,
     ): Pair<ScanSessionInput, Location> {
         val binder = collection.createLocation("Binder 1")
-        val session = ScanSession(Game.OnePiece, language, binder, condition)
+        val session = ScanSession(Game.OnePiece, InMemoryLanguageStore(language))
         return ScanSessionInput(session, catalog, collection) to binder
     }
 
@@ -88,17 +87,17 @@ class ScanSessionInputTest {
     }
 
     @Test
-    fun `confirming adds one Owned Copy with the session Location and default condition`() = runTest {
+    fun `confirming adds one Owned Copy in the given Location, Near Mint by default`() = runTest {
         val zoro = printing("OP01-001")
         seed(Language.English, zoro)
-        val (entry, binder) = entry(condition = Condition.LightlyPlayed)
+        val (entry, binder) = entry()
 
-        val added = entry.add(zoro)
+        val added = entry.add(zoro, location = binder)
 
         assertEquals(1, added.size)
         assertEquals(zoro.identifier, added.single().printing)
         assertEquals(binder.id, added.single().location)
-        assertEquals(Condition.LightlyPlayed, added.single().condition)
+        assertEquals(Condition.NearMint, added.single().condition)
         assertEquals(added, collection.ownedCopies(zoro.identifier))
     }
 
@@ -106,9 +105,9 @@ class ScanSessionInputTest {
     fun `a bulk add of N creates N separate Owned Copies sharing Printing, Location and condition`() = runTest {
         val zoro = printing("OP01-001")
         seed(Language.English, zoro)
-        val (entry, binder) = entry(condition = Condition.NearMint)
+        val (entry, binder) = entry()
 
-        val added = entry.add(zoro, count = 10)
+        val added = entry.add(zoro, count = 10, location = binder)
 
         assertEquals(10, added.size)
         assertEquals(10, added.map { it.id }.toSet().size)
@@ -117,17 +116,16 @@ class ScanSessionInputTest {
     }
 
     @Test
-    fun `a condition override applies to one add only and leaves the session default alone`() = runTest {
+    fun `a condition override applies to one add only and the next add is Near Mint again`() = runTest {
         val zoro = printing("OP01-001")
         seed(Language.English, zoro)
-        val (entry) = entry(condition = Condition.NearMint)
+        val (entry) = entry()
 
         val overridden = entry.add(zoro, condition = Condition.Damaged)
         val next = entry.add(zoro)
 
         assertEquals(Condition.Damaged, overridden.single().condition)
         assertEquals(Condition.NearMint, next.single().condition)
-        assertEquals(Condition.NearMint, entry.session.defaultCondition)
     }
 
     @Test

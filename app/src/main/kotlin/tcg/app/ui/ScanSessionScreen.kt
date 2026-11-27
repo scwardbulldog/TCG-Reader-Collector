@@ -42,29 +42,27 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
 import tcg.domain.Condition
 import tcg.domain.Language
+import tcg.domain.Location
 import tcg.domain.Printing
 import tcg.domain.onepiece.OnePiece
+import tcg.domain.scanning.ScanScope
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ScanSessionScreen(viewModel: ScanViewModel, onClose: () -> Unit) {
     LaunchedEffect(Unit) { viewModel.loadLocations() }
-    val sessionInput = viewModel.sessionInput
     val confirmation = viewModel.confirmation
 
-    val title = when {
-        sessionInput == null -> "New Scan Session"
-        else -> "Scanning · One Piece ${sessionInput.session.language.label()} · ${sessionInput.session.location.name}"
-    }
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(title, maxLines = 1) },
+                title = { Text("Scanning · One Piece", maxLines = 1) },
                 navigationIcon = {
                     IconButton(onClick = {
                         if (confirmation != null) viewModel.cancelConfirmation() else onClose()
                     }) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") }
                 },
+                actions = { LanguageSwitch(viewModel) },
             )
         },
     ) { padding ->
@@ -77,64 +75,59 @@ fun ScanSessionScreen(viewModel: ScanViewModel, onClose: () -> Unit) {
                 dismissButton = { TextButton(onClick = viewModel::keepBatch) { Text("Keep snapping") } },
             )
         }
-        Column(Modifier.fillMaxSize().padding(padding)) {
-            when {
-                sessionInput == null -> SetupForm(viewModel)
-                else -> Box(Modifier.fillMaxSize()) {
-                    // The camera stays bound beneath the confirmation, so the cooldown carries over to the next card; the torch goes off meanwhile and comes back with it.
-                    InputForm(viewModel)
-                    if (confirmation != null) {
-                        Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).pointerInput(Unit) {}) {
-                            ConfirmationForm(viewModel, confirmation)
-                        }
-                    }
+        Box(Modifier.fillMaxSize().padding(padding)) {
+            // The camera stays bound beneath the confirmation, so the cooldown carries over to the next card; the torch goes off meanwhile and comes back with it.
+            InputForm(viewModel)
+            if (confirmation != null) {
+                Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).pointerInput(Unit) {}) {
+                    ConfirmationForm(viewModel, confirmation)
                 }
             }
         }
     }
 }
 
+/** Always in the app bar, so it stays reachable over the camera, the confirmation and the review list. */
 @Composable
-private fun SetupForm(viewModel: ScanViewModel) {
-    val setup = viewModel.setup
-    var newLocationDialog by remember { mutableStateOf(false) }
-    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Text("Game: One Piece", style = MaterialTheme.typography.titleMedium)
-        Text("Language", style = MaterialTheme.typography.labelLarge)
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Language.entries.forEach {
-                FilterChip(
-                    selected = setup.language == it,
-                    onClick = { viewModel.chooseLanguage(it) },
-                    label = { Text(it.label()) },
-                )
-            }
+private fun LanguageSwitch(viewModel: ScanViewModel) {
+    // A Bulk Add batch is read in one Language, so the switch waits until its cards are added or discarded.
+    val enabled = viewModel.unsavedCards == 0
+    Row(Modifier.padding(end = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Language.entries.forEach {
+            FilterChip(
+                selected = viewModel.language == it,
+                onClick = { viewModel.switchLanguage(it) },
+                enabled = enabled,
+                label = { Text(it.label()) },
+            )
         }
-        Picker(
-            label = "Location",
-            value = setup.location?.name ?: "Choose",
-            options = viewModel.locations.map { it.name to { viewModel.chooseLocation(it) } } +
-                ("New location…" to { newLocationDialog = true }),
-            modifier = Modifier.fillMaxWidth(),
-        )
-        Picker(
-            label = "Default condition",
-            value = setup.condition.label(),
-            options = Condition.entries.map { it.label() to { viewModel.chooseCondition(it) } },
-            modifier = Modifier.fillMaxWidth(),
-        )
-        Button(
-            onClick = viewModel::start,
-            enabled = setup.canStart,
-            modifier = Modifier.fillMaxWidth(),
-        ) { Text("Start") }
     }
+}
+
+/** Picks where the copies go: no Location, an existing one or a new one. */
+@Composable
+internal fun LocationPicker(
+    viewModel: ScanViewModel,
+    location: Location?,
+    onChoose: (Location?) -> Unit,
+    forBatch: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    var newLocationDialog by remember { mutableStateOf(false) }
+    Picker(
+        label = "Location",
+        value = location?.name ?: "None",
+        options = listOf<Pair<String, () -> Unit>>("None" to { onChoose(null) }) +
+            viewModel.locations.map { it.name to { onChoose(it) } } +
+            ("New location…" to { newLocationDialog = true }),
+        modifier = modifier,
+    )
     if (newLocationDialog) {
         NewLocationDialog(
             onDismiss = { newLocationDialog = false },
             onCreate = {
                 newLocationDialog = false
-                viewModel.createLocation(it)
+                viewModel.createLocation(it, forBatch)
             },
         )
     }
@@ -143,7 +136,7 @@ private fun SetupForm(viewModel: ScanViewModel) {
 @Composable
 private fun InputForm(viewModel: ScanViewModel) {
     val result = viewModel.result
-    val scope = viewModel.sessionInput?.session?.scope
+    val scope = ScanScope(viewModel.sessionInput.session.game, viewModel.language)
     val bulkMode = viewModel.mode == ScanMode.Bulk
     var customDialog by remember { mutableStateOf<String?>(null) }
     Column(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -157,7 +150,7 @@ private fun InputForm(viewModel: ScanViewModel) {
             }
         }
         viewModel.lastAdded?.let { Text(it, color = MaterialTheme.colorScheme.primary) }
-        if (scope != null && (bulkMode || result !is ScanInputResult.SearchResults) && !(bulkMode && viewModel.reviewing)) {
+        if ((bulkMode || result !is ScanInputResult.SearchResults) && !(bulkMode && viewModel.reviewing)) {
             ScanCameraPane(
                 scope,
                 onRead = viewModel::onRead,
@@ -183,6 +176,12 @@ private fun InputForm(viewModel: ScanViewModel) {
                 "${status.snapped} snapped · ${status.read} read · ${status.needsAttention} needs attention",
                 style = MaterialTheme.typography.bodyLarge,
             )
+            if (status.snapped > 0) {
+                Text(
+                    "To switch Language, add or discard this batch first.",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
             Button(
                 onClick = viewModel::showReview,
                 enabled = viewModel.bulkRows.isNotEmpty(),
@@ -205,7 +204,7 @@ private fun InputForm(viewModel: ScanViewModel) {
             ScanInputResult.None -> Unit
             is ScanInputResult.NoMatch -> {
                 Text(
-                    "No ${viewModel.sessionInput?.session?.language?.label()} card matches ${result.baseNumber}.",
+                    "No ${viewModel.language.label()} card matches ${result.baseNumber}.",
                     style = MaterialTheme.typography.bodyLarge,
                 )
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -216,7 +215,7 @@ private fun InputForm(viewModel: ScanViewModel) {
                 customDialog?.let { base ->
                     CustomPrintingDialog(
                         title = "New custom Printing",
-                        language = viewModel.sessionInput?.session?.language?.label().orEmpty(),
+                        language = viewModel.language.label(),
                         baseNumber = base,
                         onDismiss = { customDialog = null },
                         onSave = { number, label ->
@@ -245,7 +244,6 @@ private fun InputForm(viewModel: ScanViewModel) {
 
 @Composable
 private fun ConfirmationForm(viewModel: ScanViewModel, confirmation: Confirmation) {
-    val session = viewModel.sessionInput?.session ?: return
     var customDialog by remember { mutableStateOf(false) }
     Column(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text(
@@ -269,7 +267,7 @@ private fun ConfirmationForm(viewModel: ScanViewModel, confirmation: Confirmatio
         if (customDialog) {
             CustomPrintingDialog(
                 title = "New custom Printing",
-                language = session.language.label(),
+                language = viewModel.language.label(),
                 baseNumber = confirmation.candidates.first().baseNumber,
                 onDismiss = { customDialog = false },
                 onSave = { number, label ->
@@ -283,12 +281,21 @@ private fun ConfirmationForm(viewModel: ScanViewModel, confirmation: Confirmatio
             Text("${confirmation.count}", style = MaterialTheme.typography.titleLarge)
             OutlinedButton(onClick = { viewModel.setCount(confirmation.count + 1) }) { Text("+") }
         }
-        Picker(
-            label = "Condition",
-            value = (confirmation.condition ?: session.defaultCondition).label(),
-            options = Condition.entries.map { it.label() to { viewModel.overrideCondition(it) } },
-            modifier = Modifier.fillMaxWidth(),
-        )
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Picker(
+                label = "Condition",
+                value = confirmation.condition.label(),
+                options = Condition.entries.map { it.label() to { viewModel.overrideCondition(it) } },
+                modifier = Modifier.weight(1f),
+            )
+            LocationPicker(
+                viewModel,
+                confirmation.location,
+                onChoose = viewModel::chooseLocation,
+                forBatch = false,
+                modifier = Modifier.weight(1f),
+            )
+        }
         Button(
             onClick = viewModel::confirm,
             enabled = confirmation.selected != null,

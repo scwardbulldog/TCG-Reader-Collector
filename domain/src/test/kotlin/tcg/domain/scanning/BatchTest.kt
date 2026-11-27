@@ -20,10 +20,9 @@ class BatchTest {
     private fun printing(sourceId: String, baseNumber: String = sourceId.substringBefore('_')) =
         Printing(PrintingIdentifier(Game.OnePiece, Language.English, sourceId), baseNumber, "Product", "L", "Card $sourceId", "")
 
-    private suspend fun batch(vararg printings: Printing, condition: Condition = Condition.NearMint): Batch {
+    private suspend fun batch(vararg printings: Printing): Batch {
         catalog.replaceCatalog(Game.OnePiece, Language.English, printings.toList())
-        val binder = collection.createLocation("Binder 1")
-        val session = ScanSession(Game.OnePiece, Language.English, binder, condition)
+        val session = ScanSession(Game.OnePiece, InMemoryLanguageStore())
         return Batch(ScanSessionInput(session, catalog, collection))
     }
 
@@ -158,22 +157,24 @@ class BatchTest {
     }
 
     @Test
-    fun `Add all adds only the resolved rows at the session Condition and leaves the rest for the collector`() = runTest {
+    fun `Add all adds only the resolved rows in the given Location at Near Mint and leaves the rest for the collector`() = runTest {
         val zoro = printing("OP01-001")
         val nami = printing("OP01-016")
-        val batch = batch(zoro, nami, printing("OP02-001"), printing("OP02-001_p1"), condition = Condition.LightlyPlayed)
+        val batch = batch(zoro, nami, printing("OP02-001"), printing("OP02-001_p1"))
+        val binder = collection.createLocation("Binder 1")
         batch.read(PhotoId(1), "OP01-001")
         batch.read(PhotoId(2), "OP01-001")
         batch.read(PhotoId(3), "OP01-016")
         batch.read(PhotoId(4), "OP02-001")
         batch.read(PhotoId(5), null)
 
-        val added = batch.addAll()
+        val added = batch.addAll(binder)
 
         assertEquals(3, added.size)
         assertEquals(2, collection.ownedCopies(zoro.identifier).size)
         assertEquals(1, collection.ownedCopies(nami.identifier).size)
-        assertEquals(setOf(Condition.LightlyPlayed), added.map { it.condition }.toSet())
+        assertEquals(setOf(Condition.NearMint), added.map { it.condition }.toSet())
+        assertEquals(setOf(binder.id), added.map { it.location }.toSet())
         assertEquals(3, collection.countsByPrinting().values.sum())
         assertEquals(listOf("Failed", "Ambiguous"), batch.rows.map { it::class.simpleName })
     }

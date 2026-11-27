@@ -24,7 +24,7 @@ class BulkCaptureTest {
 
     private suspend fun batch(vararg printings: Printing): Batch {
         catalog.replaceCatalog(Game.OnePiece, Language.English, printings.toList())
-        val session = ScanSession(Game.OnePiece, Language.English, collection.createLocation("Binder 1"), Condition.NearMint)
+        val session = ScanSession(Game.OnePiece, InMemoryLanguageStore())
         return Batch(ScanSessionInput(session, catalog, collection))
     }
 
@@ -173,7 +173,7 @@ class BulkCaptureTest {
         (1L..4L).forEach { capture.snap(PhotoId(it)) }
         runCurrent()
 
-        val added = capture.addAll()
+        val added = capture.addAll(null)
 
         assertEquals(2, added.size)
         assertEquals(2, collection.ownedCopies(zoro.identifier).size)
@@ -194,7 +194,7 @@ class BulkCaptureTest {
 
         capture.snap(PhotoId(3))
         runCurrent()
-        capture.addAll()
+        capture.addAll(null)
 
         assertEquals(BulkStatus(snapped = 1, read = 0, needsAttention = 0), capture.status.value)
         gate.complete(Unit)

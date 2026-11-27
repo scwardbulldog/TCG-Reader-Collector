@@ -3,12 +3,13 @@ package tcg.domain.scanning
 import tcg.domain.CatalogStore
 import tcg.domain.CollectionStore
 import tcg.domain.Condition
+import tcg.domain.Location
 import tcg.domain.OwnedCopy
 import tcg.domain.NewOwnedCopy
 import tcg.domain.Printing
 import tcg.domain.collection.CustomPrintings
 
-/** What a Base Number (read or typed) turned up in the session's Language. */
+/** What a Base Number (read or typed) turned up in the session's current Language. */
 sealed interface ScanLookup {
     /**
      * Candidate Printings in display order. [preselected] is set only when there is exactly one
@@ -31,9 +32,10 @@ class ScanSessionInput(
     suspend fun lookup(baseNumber: String): ScanLookup {
         val typed = baseNumber.trim()
         val base = typed.uppercase()
+        val language = session.language // read once: a switch mid-lookup must not mix Languages
         val printings = (
-            catalog.findByBaseNumber(session.game, session.language, base) +
-                customPrintings.forBaseNumber(session.game, session.language, base)
+            catalog.findByBaseNumber(session.game, language, base) +
+                customPrintings.forBaseNumber(session.game, language, base)
             ).inCandidateOrder()
         if (printings.isEmpty()) return ScanLookup.NoMatch(typed)
         return ScanLookup.Candidates(printings, preselected = printings.singleOrNull())
@@ -52,19 +54,27 @@ class ScanSessionInput(
     suspend fun search(query: String): List<Printing> {
         val trimmed = query.trim()
         if (trimmed.isEmpty()) return emptyList()
-        return (catalog.search(session.game, session.language, trimmed) + customPrintings.search(session.game, session.language, trimmed))
+        val language = session.language
+        return (catalog.search(session.game, language, trimmed) + customPrintings.search(session.game, language, trimmed))
             .sortedWith(compareBy({ it.baseNumber }, { candidateRank(it) }, { it.identifier.sourceId }))
     }
 
     /**
-     * Adds [count] separate Owned Copies of [printing], each in the session Location. [condition]
-     * overrides the session default for this add only.
+     * Adds [count] separate Owned Copies of [printing], each in [location] (none if null), which then
+     * becomes the session's default for the next add. [condition] is Near Mint unless the collector overrides it.
      */
-    suspend fun add(printing: Printing, count: Int = 1, condition: Condition = session.defaultCondition): List<OwnedCopy> {
+    suspend fun add(
+        printing: Printing,
+        count: Int = 1,
+        condition: Condition = Condition.NearMint,
+        location: Location? = session.location,
+    ): List<OwnedCopy> {
         require(count >= 1) { "count must be at least 1" }
         require(printing.identifier.game == session.game && printing.identifier.language == session.language) {
             "${printing.identifier} is outside this Scan Session"
         }
-        return collection.addAll(List(count) { NewOwnedCopy(printing.identifier, condition, session.location.id) })
+        val added = collection.addAll(List(count) { NewOwnedCopy(printing.identifier, condition, location?.id) })
+        session.location = location
+        return added
     }
 }

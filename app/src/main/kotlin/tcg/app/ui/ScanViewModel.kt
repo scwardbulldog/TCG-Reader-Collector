@@ -13,6 +13,7 @@ import tcg.app.scanning.CachePhotoSource
 import tcg.domain.CatalogStore
 import tcg.domain.CollectionStore
 import tcg.domain.Condition
+import tcg.domain.Game
 import tcg.domain.Language
 import tcg.domain.Location
 import tcg.domain.Printing
@@ -23,14 +24,21 @@ import tcg.domain.scanning.BatchRow
 import tcg.domain.scanning.BatchRowId
 import tcg.domain.scanning.BulkCapture
 import tcg.domain.scanning.BulkStatus
+import tcg.domain.scanning.LanguageStore
 import tcg.domain.scanning.PhotoId
-import tcg.domain.scanning.ScanSessionInput
 import tcg.domain.scanning.ScanLookup
-import tcg.domain.scanning.ScanSetup
+import tcg.domain.scanning.ScanSession
+import tcg.domain.scanning.ScanSessionInput
 import java.io.File
 
-/** The Printings offered for one lookup, with the collector's pick, copy count and one-off condition. */
-data class Confirmation(val candidates: List<Printing>, val selected: Printing?, val count: Int = 1, val condition: Condition? = null)
+/** The Printings offered for one lookup, with the collector's pick, copy count, one-off condition and Location. */
+data class Confirmation(
+    val candidates: List<Printing>,
+    val selected: Printing?,
+    val location: Location? = null,
+    val count: Int = 1,
+    val condition: Condition = Condition.NearMint,
+)
 
 /** Single confirms each scan; Bulk snaps a stack of cards and reviews them once. */
 enum class ScanMode { Single, Bulk }
@@ -51,20 +59,27 @@ class ScanViewModel(
     private val catalog: CatalogStore,
     private val collection: CollectionStore,
     private val photos: CachePhotoSource,
+    private val languages: LanguageStore,
     private val clock: () -> Long = SystemClock::elapsedRealtime,
 ) : ViewModel() {
     private var locker = BaseNumberLocker()
     private var bulk: BulkCapture? = null
     private var bulkStatusJob: Job? = null
     private var bulkRowsJob: Job? = null
+    private var lookupJob: Job? = null
 
-    var setup by mutableStateOf(ScanSetup())
+    /** Scanning starts straight away; leaving the screen ([endSession]) begins a fresh session. */
+    var sessionInput by mutableStateOf(newSessionInput())
+        private set
+
+    /** The session's current Language, mirrored here so the screen recomposes when it is switched. */
+    var language by mutableStateOf(sessionInput.session.language)
         private set
     var locations by mutableStateOf<List<Location>>(emptyList())
         private set
 
-    /** Non-null once the collector has started a session; null means the setup screen. */
-    var sessionInput by mutableStateOf<ScanSessionInput?>(null)
+    /** The Location "Add all" will use; starts as the session's last used Location. */
+    var bulkLocation by mutableStateOf<Location?>(null)
         private set
     var mode by mutableStateOf(ScanMode.Single)
         private set
@@ -103,33 +118,71 @@ class ScanViewModel(
         viewModelScope.launch { locations = collection.locations() }
     }
 
-    fun chooseLanguage(language: Language) {
-        setup = setup.copy(language = language)
-    }
-
-    fun chooseLocation(location: Location) {
-        setup = setup.copy(location = location)
-    }
-
-    fun chooseCondition(condition: Condition) {
-        setup = setup.copy(condition = condition)
-    }
-
-    fun createLocation(name: String) {
-        viewModelScope.launch {
-            val created = collection.createLocation(name)
-            locations = collection.locations()
-            chooseLocation(created)
+    /**
+     * Switches the session's Language. An open confirmation, no-match or search is redone in the new
+     * Language, so the collector doesn't rescan. Ignored while a Bulk Add batch holds unsaved cards,
+     * since a batch uses one Language.
+     */
+    fun switchLanguage(selected: Language) {
+        if (selected == language || unsavedCards > 0) return
+        sessionInput.session.switchLanguage(selected)
+        language = selected
+        lookupJob?.cancel() // anything still in flight was looked up in the old Language
+        val open = confirmation
+        val missing = result as? ScanInputResult.NoMatch
+        when {
+            open != null -> relookUp(open.candidates.first().baseNumber)
+            missing != null -> relookUp(missing.baseNumber)
+            result is ScanInputResult.SearchResults -> search()
         }
     }
 
-    fun start() {
-        val session = setup.start() ?: return
-        sessionInput = ScanSessionInput(session, catalog, collection)
-        locker = BaseNumberLocker()
-        clearInput()
-        lastAdded = null
+    // The open confirmation keeps its count, condition and Location; a Custom Printing made in the old Language is dropped.
+    private fun relookUp(baseNumber: String) {
+        discardUnusedCustomPrinting()
+        val current = sessionInput
+        launchLookup {
+            when (val lookup = current.lookup(baseNumber)) {
+                is ScanLookup.Candidates -> {
+                    result = ScanInputResult.None
+                    confirmation = (confirmation ?: confirmationOf(lookup.printings, lookup.preselected))
+                        .copy(candidates = lookup.printings, selected = lookup.preselected)
+                }
+                is ScanLookup.NoMatch -> {
+                    confirmation = null
+                    result = ScanInputResult.NoMatch(lookup.baseNumber)
+                }
+            }
+        }
     }
+
+    fun chooseLocation(location: Location?) {
+        confirmation = confirmation?.copy(location = location)
+    }
+
+    fun chooseBulkLocation(location: Location?) {
+        bulkLocation = location
+    }
+
+    /** Creates a Location and picks it for the open confirmation, or for "Add all" when [forBatch]. */
+    fun createLocation(name: String, forBatch: Boolean = false) {
+        viewModelScope.launch {
+            val created = collection.createLocation(name)
+            locations = collection.locations()
+            if (forBatch) bulkLocation = created else confirmation = confirmation?.copy(location = created)
+        }
+    }
+
+    private fun newSessionInput() = ScanSessionInput(ScanSession(Game.OnePiece, languages), catalog, collection)
+
+    // One lookup, search or re-lookup at a time: a newer one, a switch or leaving the input cancels the older.
+    private fun launchLookup(block: suspend () -> Unit) {
+        lookupJob?.cancel()
+        lookupJob = viewModelScope.launch { block() }
+    }
+
+    private fun confirmationOf(candidates: List<Printing>, selected: Printing?) =
+        Confirmation(candidates, selected, location = sessionInput.session.location)
 
     /**
      * Asks to leave the session. True means it ended; false means unsaved Bulk Add cards need the
@@ -144,20 +197,24 @@ class ScanViewModel(
         return true
     }
 
-    /** Ends the session; a different Language means a new session, so setup keeps nothing of Language. */
+    /** Ends the session; the next one starts fresh, in the remembered Language and with no Location. */
     fun endSession() {
         closeBulk()
         mode = ScanMode.Single
-        sessionInput = null
-        setup = setup.copy(language = null)
+        sessionInput = newSessionInput()
+        language = sessionInput.session.language
+        bulkLocation = null
+        locker = BaseNumberLocker()
         clearInput()
+        lastAdded = null
     }
 
     fun selectMode(selected: ScanMode) {
-        val input = sessionInput ?: return
+        val input = sessionInput
         if (selected == mode) return
         when (selected) {
             ScanMode.Bulk -> {
+                bulkLocation = input.session.location
                 val capture = BulkCapture(Batch(input), photos, viewModelScope)
                 bulk = capture
                 bulkStatusJob = viewModelScope.launch { capture.status.collect { bulkStatus = it } }
@@ -209,7 +266,7 @@ class ScanViewModel(
     fun addAll() {
         val capture = bulk ?: return
         viewModelScope.launch {
-            val added = capture.addAll()
+            val added = capture.addAll(bulkLocation)
             lastAdded = "Added ${added.size} ${if (added.size == 1) "card" else "cards"} from Bulk Add"
             if (capture.rows.value.isEmpty()) reviewing = false
         }
@@ -266,8 +323,8 @@ class ScanViewModel(
     }
 
     fun lookUp() {
-        val current = sessionInput ?: return
-        viewModelScope.launch { show(current.lookup(query)) }
+        val current = sessionInput
+        launchLookup { show(current.lookup(query)) }
     }
 
     /**
@@ -275,7 +332,7 @@ class ScanViewModel(
      * so the collector sees the finding and taps Look up themselves.
      */
     fun onRead(read: BaseNumberRead) {
-        if (sessionInput == null || confirmation != null) return
+        if (confirmation != null) return
         query = locker.read(read.baseNumber, clock()) ?: return
     }
 
@@ -283,15 +340,15 @@ class ScanViewModel(
         when (lookup) {
             is ScanLookup.Candidates -> {
                 result = ScanInputResult.None
-                confirmation = Confirmation(lookup.printings, lookup.preselected)
+                confirmation = confirmationOf(lookup.printings, lookup.preselected)
             }
             is ScanLookup.NoMatch -> result = ScanInputResult.NoMatch(lookup.baseNumber)
         }
     }
 
     fun search() {
-        val current = sessionInput ?: return
-        viewModelScope.launch { result = ScanInputResult.SearchResults(current.search(query)) }
+        val current = sessionInput
+        launchLookup { result = ScanInputResult.SearchResults(current.search(query)) }
     }
 
     fun dismissSearch() {
@@ -312,7 +369,7 @@ class ScanViewModel(
      * and offers it for confirmation next to the Printings already proposed.
      */
     fun createCustomPrinting(baseNumber: String, label: String) {
-        val current = sessionInput ?: return
+        val current = sessionInput
         val previous = justCreated
         val proposed = confirmation?.candidates.orEmpty().filter { it.identifier != previous?.identifier }
         discardUnusedCustomPrinting()
@@ -321,12 +378,12 @@ class ScanViewModel(
             justCreated = printing
             result = ScanInputResult.None
             confirmation = confirmation?.copy(candidates = proposed + printing, selected = printing)
-                ?: Confirmation(listOf(printing), selected = printing)
+                ?: confirmationOf(listOf(printing), printing)
         }
     }
 
     fun openSearchResult(printing: Printing) {
-        confirmation = Confirmation(listOf(printing), selected = printing)
+        confirmation = confirmationOf(listOf(printing), printing)
     }
 
     fun select(printing: Printing) {
@@ -342,6 +399,7 @@ class ScanViewModel(
     }
 
     fun cancelConfirmation() {
+        lookupJob?.cancel()
         discardUnusedCustomPrinting()
         confirmation = null
         finishVerdict()
@@ -351,16 +409,18 @@ class ScanViewModel(
     private fun discardUnusedCustomPrinting() {
         val created = justCreated ?: return
         justCreated = null
-        val current = sessionInput ?: return
+        val current = sessionInput
         viewModelScope.launch { current.discardCustomPrinting(created) }
     }
 
     fun confirm() {
-        val current = sessionInput ?: return
+        val current = sessionInput
         val pending = confirmation ?: return
         val printing = pending.selected ?: return
+        // A switch is still re-looking up this confirmation; its Printing is from the old Language.
+        if (printing.identifier.language != language) return
         viewModelScope.launch {
-            val added = current.add(printing, pending.count, pending.condition ?: current.session.defaultCondition)
+            val added = current.add(printing, pending.count, pending.condition, pending.location)
             if (justCreated?.identifier == printing.identifier) justCreated = null else discardUnusedCustomPrinting()
             lastAdded = "Added ${added.size} × ${printing.name} (${printing.baseNumber})"
             clearInput()
@@ -368,6 +428,7 @@ class ScanViewModel(
     }
 
     private fun clearInput() {
+        lookupJob?.cancel()
         justCreated = null
         query = ""
         result = ScanInputResult.None

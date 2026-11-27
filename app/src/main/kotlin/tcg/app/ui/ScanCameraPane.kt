@@ -113,7 +113,7 @@ fun ScanCameraPane(
     // The view port is fixed at bind time, so rebinding on a size change keeps the analysed region equal to the drawn outline.
     var previewSize by remember { mutableStateOf(IntSize.Zero) }
     val bulkMode = bulk != null
-    LaunchedEffect(scanner, scope, bulkMode) {
+    LaunchedEffect(scanner, scope.game, bulkMode) {
         if (scanner == null) return@LaunchedEffect
         snapshotFlow { previewSize }
             .debounce(RESIZE_SETTLE_MILLIS)

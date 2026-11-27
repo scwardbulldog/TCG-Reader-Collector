@@ -1,37 +1,37 @@
 package tcg.domain.scanning
 
-import tcg.domain.Condition
 import tcg.domain.Game
 import tcg.domain.Language
 import tcg.domain.Location
 
-/**
- * What the collector has picked so far. Language and Location have no default: Language is never
- * inferred and the session cannot start until both are chosen.
- */
-data class ScanSetup(
-    val language: Language? = null,
-    val location: Location? = null,
-    val condition: Condition = Condition.NearMint,
-) {
-    val canStart: Boolean get() = language != null && location != null
+/** Remembers the current Language across app restarts. */
+interface LanguageStore {
+    /** The Language last saved; English if none was. */
+    fun load(): Language
 
-    fun start(): ScanSession? {
-        val language = language ?: return null
-        val location = location ?: return null
-        return ScanSession(Game.OnePiece, language, location, condition)
-    }
+    fun save(language: Language)
 }
 
 /**
- * Settings of one Scan Session. A different Game or Language is a different session, so neither can
- * be changed here: start a new session instead.
+ * One Scan Session. It starts straight away in the remembered Language, which the collector can switch
+ * at any time. The Location and condition are supplied with each add, so the session only remembers
+ * the [location] last used, in memory, as the next add's default.
  */
 class ScanSession(
     val game: Game,
-    val language: Language,
-    val location: Location,
-    val defaultCondition: Condition,
+    private val languages: LanguageStore,
 ) {
+    var language: Language = languages.load()
+        private set
+
+    /** The Location of the last add; null until one is made, or when the last add had none. */
+    var location: Location? = null
+        internal set
+
     val scope: ScanScope get() = ScanScope(game, language)
+
+    fun switchLanguage(language: Language) {
+        this.language = language
+        languages.save(language)
+    }
 }

@@ -41,6 +41,13 @@ fun BulkReviewList(viewModel: ScanViewModel, modifier: Modifier = Modifier) {
                 Text("Add all ($resolvedCards)")
             }
         }
+        LocationPicker(
+            viewModel,
+            viewModel.bulkLocation,
+            onChoose = viewModel::chooseBulkLocation,
+            forBatch = true,
+            modifier = Modifier.fillMaxWidth(),
+        )
         if (rows.isEmpty()) Text("Nothing to review yet.", style = MaterialTheme.typography.bodyLarge)
         LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             items(rows, key = { it.id.value }) { row ->
@@ -64,7 +71,7 @@ private fun FailedRow(viewModel: ScanViewModel, row: BatchRow.Failed) {
                 Image(thumbnail.asImageBitmap(), "Photo", Modifier.width(72.dp), contentScale = ContentScale.Fit)
             }
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                val language = viewModel.sessionInput?.session?.language?.label().orEmpty()
+                val language = viewModel.language.label()
                 Text(
                     if (row.baseNumber == null) "Couldn't read a Base Number" else "No $language card matches ${row.baseNumber}",
                     style = MaterialTheme.typography.titleMedium,

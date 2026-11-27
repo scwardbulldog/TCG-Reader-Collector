@@ -1,5 +1,6 @@
 package tcg.domain.scanning
 
+import tcg.domain.Location
 import tcg.domain.OwnedCopy
 import tcg.domain.Printing
 
@@ -82,13 +83,13 @@ class Batch(private val input: ScanSessionInput) {
     }
 
     /**
-     * Adds every resolved row through [ScanSessionInput.add] and drops it from the batch; failed and
-     * ambiguous rows stay for the collector. A row that fails to add stays too, so a retry never double-adds.
+     * Adds every resolved row, all in [location], through [ScanSessionInput.add] and drops it from the batch;
+     * failed and ambiguous rows stay for the collector. A row that fails to add stays too, so a retry never double-adds.
      */
-    suspend fun addAll(): List<OwnedCopy> {
+    suspend fun addAll(location: Location?): List<OwnedCopy> {
         val added = mutableListOf<OwnedCopy>()
         for (row in entries.filterIsInstance<BatchRow.Resolved>()) {
-            added += input.add(row.printing, row.count)
+            added += input.add(row.printing, row.count, location = location)
             entries.remove(row)
         }
         return added
