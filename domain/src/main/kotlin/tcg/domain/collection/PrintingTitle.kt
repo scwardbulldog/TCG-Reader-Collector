@@ -38,13 +38,13 @@ class PrintingTitles(private val catalog: CatalogStore) {
 /** Treatments joined for display; null when unknown or empty, because no Treatment means unknown, never "plain". */
 val Printing.treatmentText: String? get() = treatments?.takeIf { it.isNotEmpty() }?.joinToString(", ")
 
-/** The Release Product with its Product code in brackets when it has one; null when neither is known. */
+/** The Release Product with its Product code in brackets when it has one and the name doesn't already show it; null when neither is known. */
 val Printing.productText: String?
     get() {
         val code = productCode?.takeIf { it.isNotBlank() }
         return when {
             releaseProduct.isBlank() -> code
-            code == null -> releaseProduct
+            code == null || releaseProduct.contains(code) -> releaseProduct
             else -> "$releaseProduct ($code)"
         }
     }

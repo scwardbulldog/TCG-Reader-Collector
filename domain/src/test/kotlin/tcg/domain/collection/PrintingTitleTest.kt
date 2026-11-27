@@ -97,6 +97,7 @@ class PrintingTitleTest {
     fun `the Release Product shows with its Product code when it has one`() {
         assertEquals("ROMANCE DAWN", enZoro.productText)
         assertEquals("ROMANCE DAWN (OP-01)", enZoro.copy(productCode = "OP-01").productText)
+        assertEquals("BOOSTER PACK [OP-01]", enZoro.copy(releaseProduct = "BOOSTER PACK [OP-01]", productCode = "OP-01").productText)
         assertEquals("OP-01", enZoro.copy(releaseProduct = "", productCode = "OP-01").productText)
         assertNull(enZoro.copy(releaseProduct = "").productText)
     }
