@@ -82,7 +82,7 @@ class CatalogGapsTest {
             listOf(zoro),
             list.rows(filter = CollectionFilter(releaseProduct = "Romance Dawn", variant = Variant.AlternateArt)).map { it.printing },
         )
-        assertEquals(listOf("Romance Dawn"), list.releaseProducts())
+        assertEquals(listOf("Romance Dawn"), list.releaseProducts().map { it.releaseProduct })
     }
 
     @Test

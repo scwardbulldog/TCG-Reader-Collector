@@ -2,7 +2,6 @@ package tcg.app.storage
 
 import tcg.domain.CollectionSnapshot
 import tcg.domain.CollectionStore
-import tcg.domain.DeleteLocationResult
 import tcg.domain.Game
 import tcg.domain.Language
 import tcg.domain.Location
@@ -73,8 +72,9 @@ class RoomCollectionStore(private val dao: CollectionDao) : CollectionStore {
     override suspend fun renameLocation(id: LocationId, name: String) =
         dao.renameLocation(id.value, name)
 
-    override suspend fun deleteLocation(id: LocationId): DeleteLocationResult =
-        if (dao.deleteLocationIfEmpty(id.value)) DeleteLocationResult.Deleted else DeleteLocationResult.NotEmpty
+    override suspend fun deleteLocation(id: LocationId) = dao.deleteLocationAndClear(id.value)
+
+    override suspend fun copiesIn(id: LocationId): Int = dao.copiesIn(id.value)
 
     override suspend fun snapshot(): CollectionSnapshot {
         val rows = dao.snapshot()

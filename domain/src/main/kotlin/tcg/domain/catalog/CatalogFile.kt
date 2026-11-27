@@ -7,8 +7,12 @@ import tcg.domain.Language
 import tcg.domain.Printing
 import tcg.domain.PrintingIdentifier
 import tcg.domain.Variant
+import java.time.Instant
 
 class CatalogFormatException(message: String, cause: Throwable? = null) : Exception(message, cause)
+
+/** A parsed Catalog file; [generatedAt] is null when the file has none or it is not a timestamp. */
+internal class ParsedCatalog(val printings: List<Printing>, val generatedAt: Instant?)
 
 /** Reads a published Catalog file (docs/catalog-format.md) into Printings, rejecting anything unexpected. */
 internal object CatalogFile {
@@ -20,6 +24,7 @@ internal object CatalogFile {
         val schemaVersion: Int,
         val game: String,
         val language: String,
+        val generatedAt: String? = null,
         val printings: List<Entry>,
     )
 
@@ -36,7 +41,7 @@ internal object CatalogFile {
         val treatments: List<String>? = null,
     )
 
-    fun parse(target: CatalogTarget, content: String): List<Printing> {
+    fun parse(target: CatalogTarget, content: String): ParsedCatalog {
         val file = try {
             json.decodeFromString<File>(content)
         } catch (e: Exception) {
@@ -52,7 +57,7 @@ internal object CatalogFile {
         if (file.printings.map { it.id }.toSet().size != file.printings.size) {
             throw CatalogFormatException("Catalog file has duplicate Printing ids")
         }
-        return file.printings.map {
+        val printings = file.printings.map {
             Printing(
                 identifier = PrintingIdentifier(target.game, target.language, it.id),
                 baseNumber = it.baseNumber,
@@ -65,6 +70,8 @@ internal object CatalogFile {
                 treatments = it.treatments?.takeIf(List<String>::isNotEmpty),
             )
         }
+        val generatedAt = file.generatedAt?.let { runCatching { Instant.parse(it) }.getOrNull() }
+        return ParsedCatalog(printings, generatedAt)
     }
 
     private fun variant(id: String, code: String) = when (code) {

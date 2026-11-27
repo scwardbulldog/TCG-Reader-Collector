@@ -28,10 +28,11 @@ class CollectionListTest {
         name: String,
         copies: Int = 1,
         releaseProduct: String = "Romance Dawn",
+        productCode: String? = null,
     ): PrintingIdentifier {
         val identifier = id(language, sourceId)
         catalogued[language] = catalogued[language].orEmpty() +
-            Printing(identifier, baseNumber, releaseProduct, "L", name, "https://example.invalid/$sourceId.png", fixtureVariant(sourceId))
+            Printing(identifier, baseNumber, releaseProduct, "L", name, "https://example.invalid/$sourceId.png", fixtureVariant(sourceId), productCode)
         catalog.replaceCatalog(Game.OnePiece, language, catalogued.getValue(language))
         repeat(copies) { collection.add(NewOwnedCopy(identifier)) }
         return identifier
@@ -182,7 +183,55 @@ class CollectionListTest {
         own(Language.Japanese, "OP01-016", "OP01-016", "ナミ", releaseProduct = "Premium Booster")
         ownUnresolved(Language.English, "ST99-007")
 
-        assertEquals(listOf("Premium Booster", "Romance Dawn"), list.releaseProducts())
+        assertEquals(listOf("Premium Booster", "Romance Dawn"), list.releaseProducts().map { it.releaseProduct })
+    }
+
+    @Test
+    fun `rows sort by name, newest added, or Product code, falling back to Base Number`() = runTest {
+        val zoro = own(Language.English, "OP01-001", "OP01-001", "Roronoa Zoro", productCode = "OP-02")
+        val nami = own(Language.English, "OP01-016", "OP01-016", "nami", productCode = "OP-01")
+        val ace = own(Language.English, "OP02-013", "OP02-013", "Ace")
+        collection.add(NewOwnedCopy(zoro))
+
+        assertEquals(listOf(ace, nami, zoro), list.rows(sort = CollectionSort.Name).map { it.printing })
+        assertEquals(listOf(zoro, ace, nami), list.rows(sort = CollectionSort.DateAdded).map { it.printing })
+        assertEquals(listOf(nami, zoro, ace), list.rows(sort = CollectionSort.ProductCode).map { it.printing })
+        assertEquals(listOf(zoro, nami, ace), list.rows().map { it.printing })
+    }
+
+    @Test
+    fun `filter options show the Product code first and are ordered by it`() = runTest {
+        own(Language.English, "OP01-001", "OP01-001", "Roronoa Zoro", releaseProduct = "Romance Dawn", productCode = "OP-01")
+        own(Language.English, "OP02-013", "OP02-013", "Ace", releaseProduct = "Paramount War", productCode = "OP-02")
+        own(Language.English, "P-001", "P-001", "Promo", releaseProduct = "Event Pack")
+
+        assertEquals(
+            listOf("OP-01 · Romance Dawn", "OP-02 · Paramount War", "Event Pack"),
+            list.releaseProducts().map { it.label },
+        )
+        assertEquals(listOf("Paramount War"), list.releaseProducts().filter { it.productCode == "OP-02" }.map { it.releaseProduct })
+    }
+
+    @Test
+    fun `deleting a Location in use gives its Owned Copies Location None and keeps them`() = runTest {
+        val zoro = own(Language.English, "OP01-001", "OP01-001", "Roronoa Zoro", copies = 2)
+        val binder = collection.createLocation("Binder 1")
+        collection.update(collection.ownedCopies(zoro).first().copy(location = binder.id))
+
+        assertEquals(listOf(LocationUse(binder, 1)), list.locationUses())
+        list.deleteLocation(binder.id)
+
+        assertEquals(emptyList(), list.locationUses())
+        assertEquals(listOf(null, null), collection.ownedCopies(zoro).map { it.location })
+    }
+
+    @Test
+    fun `a Location is renamed with surrounding space trimmed, and never to nothing`() = runTest {
+        val binder = collection.createLocation("Binder 1")
+        list.renameLocation(binder.id, "  Binder One ")
+        list.renameLocation(binder.id, "   ")
+
+        assertEquals(listOf("Binder One"), list.locations().map { it.name })
     }
 
     @Test

@@ -19,8 +19,13 @@ import tcg.domain.collection.CardViewState
 import tcg.domain.collection.CollectionFilter
 import tcg.domain.collection.CollectionList
 import tcg.domain.collection.CollectionRow
+import tcg.domain.collection.CollectionSort
+import tcg.domain.collection.LocationUse
+import tcg.domain.collection.ReleaseProductOption
 import tcg.domain.collection.PrintingDetail
 import tcg.domain.collection.PrintingDetailState
+import java.time.LocalDate
+import java.time.ZoneId
 
 class CollectionViewModel(private val list: CollectionList) : ViewModel() {
     var search by mutableStateOf("")
@@ -33,10 +38,21 @@ class CollectionViewModel(private val list: CollectionList) : ViewModel() {
     var rows by mutableStateOf<List<CollectionRow>?>(null)
         private set
 
-    var releaseProducts by mutableStateOf<List<String>>(emptyList())
+    var releaseProducts by mutableStateOf<List<ReleaseProductOption>>(emptyList())
         private set
 
     var locations by mutableStateOf<List<Location>>(emptyList())
+        private set
+
+    var sort by mutableStateOf(CollectionSort.BaseNumber)
+        private set
+
+    /** When the oldest stored Catalog file was generated, in the phone's time zone; null if unknown. */
+    var catalogDate by mutableStateOf<LocalDate?>(null)
+        private set
+
+    /** The Locations with their copy counts while Manage Locations is open; null when it is closed. */
+    var managedLocations by mutableStateOf<List<LocationUse>?>(null)
         private set
 
     private var loading: Job? = null
@@ -55,13 +71,43 @@ class CollectionViewModel(private val list: CollectionList) : ViewModel() {
         refresh()
     }
 
+    fun onSortChanged(changed: CollectionSort) {
+        sort = changed
+        refresh()
+    }
+
+    fun openManageLocations() {
+        viewModelScope.launch { managedLocations = list.locationUses() }
+    }
+
+    fun closeManageLocations() {
+        managedLocations = null
+    }
+
+    fun renameLocation(id: LocationId, name: String) = changeLocations { list.renameLocation(id, name) }
+
+    fun deleteLocation(id: LocationId) {
+        // A deleted Location can no longer filter the list.
+        if (filter.location == id) filter = filter.copy(location = null)
+        changeLocations { list.deleteLocation(id) }
+    }
+
+    private fun changeLocations(change: suspend () -> Unit) {
+        viewModelScope.launch {
+            change()
+            managedLocations = list.locationUses()
+            refresh()
+        }
+    }
+
     fun refresh() {
         loading?.cancel()
         isLoading = true
         val job = viewModelScope.launch {
             releaseProducts = list.releaseProducts()
             locations = list.locations()
-            rows = list.rows(search, filter)
+            catalogDate = list.catalogGeneratedAt()?.atZone(ZoneId.systemDefault())?.toLocalDate()
+            rows = list.rows(search, filter, sort)
         }
         loading = job
         job.invokeOnCompletion { if (loading === job) isLoading = false }

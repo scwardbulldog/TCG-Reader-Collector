@@ -12,7 +12,7 @@ _Avoid_: TCG, franchise, series
 The collector's personal inventory of **Owned Copies**. A **Game**'s Collection is the subset whose **Printings** belong to that Game.
 
 **Catalog**:
-Every **Printing** of a **Game** that the app knows about, in every supported **Language**; scans and searches are matched against it.
+Every **Printing** of a **Game** that the app knows about, in every supported **Language**; scans and searches are matched against it. Its **Catalog date** is the oldest generation date among the **Languages** in use.
 _Avoid_: Card database, card list, set list
 
 **Card**:
@@ -87,7 +87,7 @@ One physical card the collector holds, tied to exactly one **Printing**, with it
 _Avoid_: Card (that is what its **Printing** is a version of), item, entry, holding
 
 **Location**:
-Where an **Owned Copy** is physically kept, e.g. "Binder 3" or "Bulk box A".
+Where an **Owned Copy** is physically kept, e.g. "Binder 3" or "Bulk box A". A copy may have none (**Location None**); deleting a Location moves its copies there.
 _Avoid_: Storage, container, bin
 
 **Scan Session**:

@@ -15,7 +15,7 @@ import tcg.domain.backup.BackupStatusStore
         PrintingEntity::class, CatalogVersionEntity::class, LocationEntity::class, OwnedCopyEntity::class,
         BackupStatusEntity::class,
     ],
-    version = 5,
+    version = 6,
     exportSchema = true,
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -93,9 +93,18 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        /** Adds the Catalog file's generation time to the Catalog version table; it fills in at the next refresh. */
+        val MIGRATION_5_6 = object : Migration(5, 6) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `catalog_version` ADD COLUMN `generatedAt` TEXT")
+                // Forget the stored versions so the next launch downloads the files and records their dates.
+                db.execSQL("UPDATE `catalog_version` SET `version` = NULL")
+            }
+        }
+
         fun open(context: Context): AppDatabase =
             Room.databaseBuilder(context, AppDatabase::class.java, "tcg.db")
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
                 .build()
 
         fun inMemory(context: Context): AppDatabase =

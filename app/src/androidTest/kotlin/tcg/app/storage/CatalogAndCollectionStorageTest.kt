@@ -9,7 +9,6 @@ import tcg.domain.CatalogStore
 import tcg.domain.CollectionSnapshot
 import tcg.domain.CollectionStore
 import tcg.domain.Condition
-import tcg.domain.DeleteLocationResult
 import tcg.domain.Location
 import tcg.domain.LocationId
 import tcg.domain.Game
@@ -205,22 +204,28 @@ class CatalogAndCollectionStorageTest {
     }
 
     @Test
-    fun an_empty_location_can_be_deleted() = runTest {
-        val bulk = collection.createLocation("Bulk box A")
-
-        assertEquals(DeleteLocationResult.Deleted, collection.deleteLocation(bulk.id))
-        assertEquals(emptyList(), collection.locations())
-    }
-
-    @Test
-    fun a_location_holding_an_owned_copy_cannot_be_deleted() = runTest {
+    fun deleting_a_location_in_use_gives_its_owned_copies_location_none() = runTest {
         val id = PrintingIdentifier(Game.OnePiece, Language.English, "OP01-001")
         val binder = collection.createLocation("Binder 1")
         collection.add(NewOwnedCopy(id, location = binder.id))
+        collection.add(NewOwnedCopy(id))
 
-        assertEquals(DeleteLocationResult.NotEmpty, collection.deleteLocation(binder.id))
-        assertEquals(listOf(binder), collection.locations())
-        assertEquals(1, collection.ownedCopies(id).size)
+        assertEquals(1, collection.copiesIn(binder.id))
+        collection.deleteLocation(binder.id)
+
+        assertEquals(emptyList(), collection.locations())
+        assertEquals(listOf(null, null), collection.ownedCopies(id).map { it.location })
+    }
+
+    @Test
+    fun the_catalog_generation_date_is_the_oldest_stored_one() = runTest {
+        val zoro = PrintingIdentifier(Game.OnePiece, Language.English, "OP01-001_p1")
+        val jp = PrintingIdentifier(Game.OnePiece, Language.Japanese, "OP01-001_p1")
+        assertNull(catalog.catalogGeneratedAt())
+        catalog.replaceCatalog(Game.OnePiece, Language.English, listOf(printing(zoro)), generatedAt = Instant.parse("2026-02-01T00:00:00Z"))
+        catalog.replaceCatalog(Game.OnePiece, Language.Japanese, listOf(printing(jp)), generatedAt = Instant.parse("2026-01-01T00:00:00Z"))
+
+        assertEquals(Instant.parse("2026-01-01T00:00:00Z"), catalog.catalogGeneratedAt())
     }
 
     @Test

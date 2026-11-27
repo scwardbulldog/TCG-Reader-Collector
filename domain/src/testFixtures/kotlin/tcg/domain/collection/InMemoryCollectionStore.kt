@@ -2,7 +2,6 @@ package tcg.domain.collection
 
 import tcg.domain.CollectionSnapshot
 import tcg.domain.CollectionStore
-import tcg.domain.DeleteLocationResult
 import tcg.domain.Game
 import tcg.domain.Language
 import tcg.domain.Location
@@ -70,11 +69,12 @@ class InMemoryCollectionStore : CollectionStore {
         if (index >= 0) locations[index] = Location(id, name)
     }
 
-    override suspend fun deleteLocation(id: LocationId): DeleteLocationResult {
-        if (copies.any { it.location == id }) return DeleteLocationResult.NotEmpty
+    override suspend fun deleteLocation(id: LocationId) {
+        copies.replaceAll { if (it.location == id) it.copy(location = null) else it }
         locations.removeAll { it.id == id }
-        return DeleteLocationResult.Deleted
     }
+
+    override suspend fun copiesIn(id: LocationId): Int = copies.count { it.location == id }
 
     override suspend fun snapshot(): CollectionSnapshot =
         CollectionSnapshot(locations.toList(), copies.toList(), custom.values.toList(), lastKnown.values.toList())

@@ -1,16 +1,16 @@
 package tcg.app.ui
 
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
@@ -46,6 +46,7 @@ import tcg.domain.Language
 import tcg.domain.PrintingIdentifier
 import tcg.domain.Variant
 import tcg.domain.collection.CollectionRow
+import tcg.domain.collection.CollectionSort
 import tcg.domain.collection.CustomPrintings
 import tcg.domain.isCustom
 
@@ -89,11 +90,17 @@ fun CollectionScreen(
                         MenuEntry("Export CSV", onDismiss = { menuOpen = false }, onClick = actions.onExportCsv)
                         MenuEntry("Backup", onDismiss = { menuOpen = false }, onClick = actions.onBackup)
                         MenuEntry("Restore", onDismiss = { menuOpen = false }, onClick = actions.onRestore)
+                        MenuEntry("Manage Locations", onDismiss = { menuOpen = false }, onClick = viewModel::openManageLocations)
                         MenuEntry(
                             "Update catalog",
                             enabled = !updatingCatalog,
                             onDismiss = { menuOpen = false },
                             onClick = actions.onUpdateCatalog,
+                        )
+                        Text(
+                            viewModel.catalogDate?.let { "Catalog of $it" } ?: "Catalog date unknown",
+                            style = MaterialTheme.typography.bodySmall,
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
                         )
                         actions.onSeedSampleData?.let {
                             MenuEntry("Add sample data (debug)", onDismiss = { menuOpen = false }, onClick = it)
@@ -117,6 +124,14 @@ fun CollectionScreen(
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
             )
             FilterBar(viewModel)
+            if (rows != null && rows.isNotEmpty()) {
+                val copies = rows.sumOf { it.ownedCopyCount }
+                Text(
+                    "$copies ${if (copies == 1) "copy" else "copies"} · ${rows.size} ${if (rows.size == 1) "Printing" else "Printings"}",
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+                )
+            }
             if (viewModel.isLoading || updatingCatalog) LoadingBar(Modifier.padding(top = 8.dp))
             when {
                 rows == null -> Unit
@@ -139,22 +154,33 @@ fun CollectionScreen(
         viewModel.refresh()
         scope.launch { snackbarHostState.showSnackbar("Restored $copies Owned Copies") }
     })
+
+    viewModel.managedLocations?.let { uses ->
+        ManageLocationsDialog(
+            locations = uses,
+            onRename = { use, name -> viewModel.renameLocation(use.location.id, name) },
+            onDelete = { use -> viewModel.deleteLocation(use.location.id) },
+            onDismiss = viewModel::closeManageLocations,
+        )
+    }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun FilterBar(viewModel: CollectionViewModel) {
     val filter = viewModel.filter
     val any = "Any"
     val width = Modifier.width(200.dp)
-    Row(
-        Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp),
+    FlowRow(
+        Modifier.fillMaxWidth().padding(horizontal = 16.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Picker(
             label = "Release Product",
-            value = filter.releaseProduct ?: any,
+            value = viewModel.releaseProducts.firstOrNull { it.releaseProduct == filter.releaseProduct }?.label
+                ?: filter.releaseProduct ?: any,
             options = listOf<Pair<String, () -> Unit>>(any to { viewModel.onFilterChanged(filter.copy(releaseProduct = null)) }) +
-                viewModel.releaseProducts.map { it to { viewModel.onFilterChanged(filter.copy(releaseProduct = it)) } },
+                viewModel.releaseProducts.map { it.label to { viewModel.onFilterChanged(filter.copy(releaseProduct = it.releaseProduct)) } },
             modifier = width,
         )
         Picker(
@@ -178,7 +204,20 @@ private fun FilterBar(viewModel: CollectionViewModel) {
                 viewModel.locations.map { it.name to { viewModel.onFilterChanged(filter.copy(location = it.id)) } },
             modifier = width,
         )
+        Picker(
+            label = "Sort",
+            value = viewModel.sort.label(),
+            options = CollectionSort.entries.map { it.label() to { viewModel.onSortChanged(it) } },
+            modifier = width,
+        )
     }
+}
+
+private fun CollectionSort.label() = when (this) {
+    CollectionSort.BaseNumber -> "Base Number"
+    CollectionSort.Name -> "Name"
+    CollectionSort.DateAdded -> "Date added"
+    CollectionSort.ProductCode -> "Product code"
 }
 
 @Composable

@@ -75,6 +75,8 @@ data class CatalogVersionEntity(
     val game: Game,
     val language: Language,
     val version: String?,
+    /** The ISO-8601 instant the stored Catalog file was generated. */
+    val generatedAt: String? = null,
 )
 
 @Entity(tableName = "location")

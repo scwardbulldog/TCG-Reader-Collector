@@ -41,9 +41,9 @@ class CatalogUpdater(
         return when (val fetch = source.fetch(target.game, target.language, known)) {
             CatalogFetch.UpToDate -> CatalogUpdateResult.UpToDate
             is CatalogFetch.Fetched -> {
-                val printings = CatalogFile.parse(target, fetch.content)
-                store.replaceCatalog(target.game, target.language, printings, fetch.version)
-                CatalogUpdateResult.Updated(printings.size)
+                val file = CatalogFile.parse(target, fetch.content)
+                store.replaceCatalog(target.game, target.language, file.printings, fetch.version, file.generatedAt)
+                CatalogUpdateResult.Updated(file.printings.size)
             }
         }
     }

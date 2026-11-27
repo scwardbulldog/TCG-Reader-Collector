@@ -6,11 +6,14 @@ import tcg.domain.Language
 import tcg.domain.Printing
 import tcg.domain.PrintingIdentifier
 import tcg.domain.containsFolded
+import java.time.Instant
 
 class RoomCatalogStore(private val dao: CatalogDao) : CatalogStore {
-    override suspend fun replaceCatalog(game: Game, language: Language, printings: List<Printing>, version: String?) {
-        dao.replaceAll(game, language, printings, version)
+    override suspend fun replaceCatalog(game: Game, language: Language, printings: List<Printing>, version: String?, generatedAt: Instant?) {
+        dao.replaceAll(game, language, printings, version, generatedAt?.toString())
     }
+
+    override suspend fun catalogGeneratedAt(): Instant? = dao.oldestGeneratedAt()?.let(Instant::parse)
 
     override suspend fun catalogVersion(game: Game, language: Language): String? = dao.version(game, language)
 

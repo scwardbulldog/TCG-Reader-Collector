@@ -99,7 +99,7 @@ class CustomPrintingsTest {
         assertEquals(printing, row.details)
         assertFalse(row.noLongerInCatalog)
         assertFalse(row.unresolved)
-        assertEquals(listOf("Custom"), CollectionList(collection, catalog).releaseProducts())
+        assertEquals(listOf("Custom"), CollectionList(collection, catalog).releaseProducts().map { it.releaseProduct })
     }
 
     @Test

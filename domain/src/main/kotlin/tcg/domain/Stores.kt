@@ -1,5 +1,7 @@
 package tcg.domain
 
+import java.time.Instant
+
 /**
  * The Catalog: every Printing the app knows about. Stored apart from the Collection in effect (a refresh never
  * changes an Owned Copy), though in one Printing table with the Custom Printings.
@@ -10,10 +12,19 @@ interface CatalogStore {
      * transaction, by the [tcg.domain.catalog.CatalogRefresh] rules: a dropped Printing an Owned Copy uses stays
      * flagged, an unused one goes. Never touches an Owned Copy or a Custom Printing.
      */
-    suspend fun replaceCatalog(game: Game, language: Language, printings: List<Printing>, version: String? = null)
+    suspend fun replaceCatalog(
+        game: Game,
+        language: Language,
+        printings: List<Printing>,
+        version: String? = null,
+        generatedAt: Instant? = null,
+    )
 
     /** The source version of the stored Catalog for one Game and Language; null if none was recorded. */
     suspend fun catalogVersion(game: Game, language: Language): String?
+
+    /** When the oldest stored Catalog file was generated, so the date never overstates how fresh the Catalog is; null if none was recorded. */
+    suspend fun catalogGeneratedAt(): Instant?
 
     /** A Catalog row, including one flagged as no longer in the Catalog; never a Custom Printing. */
     suspend fun find(identifier: PrintingIdentifier): Printing?
@@ -27,8 +38,6 @@ interface CatalogStore {
      */
     suspend fun search(game: Game, language: Language, query: String): List<Printing>
 }
-
-enum class DeleteLocationResult { Deleted, NotEmpty }
 
 /**
  * The Collection: Owned Copies, Locations and Custom Printings. An Owned Copy may reference a
@@ -70,7 +79,11 @@ interface CollectionStore {
 
     suspend fun renameLocation(id: LocationId, name: String)
 
-    suspend fun deleteLocation(id: LocationId): DeleteLocationResult
+    /** Deletes the Location; the Owned Copies in it keep everything else and get Location None. */
+    suspend fun deleteLocation(id: LocationId)
+
+    /** How many Owned Copies are in the Location. */
+    suspend fun copiesIn(id: LocationId): Int
 
     /** Every Location and Owned Copy, read as one consistent snapshot. */
     suspend fun snapshot(): CollectionSnapshot

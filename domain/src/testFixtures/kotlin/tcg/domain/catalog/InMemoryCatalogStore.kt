@@ -7,14 +7,17 @@ import tcg.domain.Language
 import tcg.domain.Printing
 import tcg.domain.PrintingIdentifier
 import tcg.domain.containsFolded
+import java.time.Instant
 
 /** [collection], when given, is where Owned Copies are read from to decide which dropped Printings a refresh keeps. */
 class InMemoryCatalogStore(private val collection: CollectionStore? = null) : CatalogStore {
     private val printings = mutableMapOf<CatalogTarget, List<Printing>>()
     private val versions = mutableMapOf<CatalogTarget, String?>()
+    private val generated = mutableMapOf<CatalogTarget, Instant?>()
 
-    override suspend fun replaceCatalog(game: Game, language: Language, printings: List<Printing>, version: String?) {
+    override suspend fun replaceCatalog(game: Game, language: Language, printings: List<Printing>, version: String?, generatedAt: Instant?) {
         val target = CatalogTarget(game, language)
+        generated[target] = generatedAt
         val inUse = collection?.countsByPrinting()?.keys.orEmpty()
         this.printings[target] = CatalogRefresh.apply(this.printings[target].orEmpty(), printings, inUse)
         versions[target] = version
@@ -22,6 +25,8 @@ class InMemoryCatalogStore(private val collection: CollectionStore? = null) : Ca
 
     override suspend fun catalogVersion(game: Game, language: Language): String? =
         versions[CatalogTarget(game, language)]
+
+    override suspend fun catalogGeneratedAt(): Instant? = generated.values.filterNotNull().minOrNull()
 
     override suspend fun find(identifier: PrintingIdentifier): Printing? =
         printings[CatalogTarget(identifier.game, identifier.language)].orEmpty().firstOrNull { it.identifier == identifier }

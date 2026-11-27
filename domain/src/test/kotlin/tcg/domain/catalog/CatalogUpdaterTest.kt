@@ -73,6 +73,7 @@ class CatalogUpdaterTest {
         assertEquals(Variant.Reprint, find("OP01-001_r1").variant)
         assertEquals("SP CARD", find("OP01-001_r1").rarity)
         assertEquals(null, find("OP01-001_r1").productCode)
+        assertEquals(java.time.Instant.parse("2026-01-01T00:00:00Z"), store.catalogGeneratedAt())
     }
 
     @Test

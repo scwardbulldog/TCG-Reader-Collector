@@ -27,16 +27,19 @@ interface CatalogDao {
 
     /** One transaction: the stored rows, the Owned Copies that use them and the write all see the same moment. */
     @Transaction
-    suspend fun replaceAll(game: Game, language: Language, printings: List<Printing>, version: String?) {
+    suspend fun replaceAll(game: Game, language: Language, printings: List<Printing>, version: String?, generatedAt: String?) {
         val stored = catalogRows(game, language).map { it.toDomain() }
         val inUse = ownedSourceIds(game, language).mapTo(mutableSetOf()) { PrintingIdentifier(game, language, it) }
         deleteCatalogRows(game, language)
         insertAll(CatalogRefresh.apply(stored, printings, inUse).map { it.toEntity() })
-        upsertVersion(CatalogVersionEntity(game, language, version))
+        upsertVersion(CatalogVersionEntity(game, language, version, generatedAt))
     }
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertVersion(version: CatalogVersionEntity)
+
+    @Query("SELECT MIN(generatedAt) FROM catalog_version WHERE generatedAt IS NOT NULL")
+    suspend fun oldestGeneratedAt(): String?
 
     @Query("SELECT version FROM catalog_version WHERE game = :game AND language = :language")
     suspend fun version(game: Game, language: Language): String?
@@ -115,11 +118,13 @@ interface CollectionDao {
     @Query("DELETE FROM location WHERE id = :id")
     suspend fun deleteLocationRow(id: Long)
 
+    @Query("UPDATE owned_copy SET locationId = NULL WHERE locationId = :id")
+    suspend fun clearLocation(id: Long)
+
     @Transaction
-    suspend fun deleteLocationIfEmpty(id: Long): Boolean {
-        if (copiesIn(id) > 0) return false
+    suspend fun deleteLocationAndClear(id: Long) {
+        clearLocation(id)
         deleteLocationRow(id)
-        return true
     }
 
     @Query("SELECT * FROM owned_copy ORDER BY id")
