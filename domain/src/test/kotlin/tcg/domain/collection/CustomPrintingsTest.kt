@@ -111,7 +111,7 @@ class CustomPrintingsTest {
         val lines = CollectionExport(collection, catalog).csv().lines()
 
         assertEquals(
-            "onepiece,EN,OP01-001,onepiece / EN / custom:id0,Milk Box Stamp,,Custom,Near Mint,,",
+            "onepiece,EN,OP01-001,onepiece / EN / custom:id0,Milk Box Stamp,,,Custom,Near Mint,,",
             lines[1],
         )
     }

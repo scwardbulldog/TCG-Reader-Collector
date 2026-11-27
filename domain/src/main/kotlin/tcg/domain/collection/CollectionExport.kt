@@ -7,10 +7,14 @@ import tcg.domain.OwnedCopy
 /** Reads the whole Collection, across every Game and Language, and renders it as CSV. */
 class CollectionExport(private val collection: CollectionStore, catalog: CatalogStore) {
     private val printings = PrintingResolver(collection, catalog)
+    private val titles = PrintingTitles(catalog)
 
     suspend fun csv(): String {
         val owned = collection.countsByPrinting().keys
         val details = owned.mapNotNull { id -> printings.resolve(id)?.let { id to it } }.toMap()
+        val englishNames = details.mapNotNull { (id, printing) ->
+            titles.englishName(id.game, printing.baseNumber)?.let { id to it }
+        }.toMap()
         val copies = owned.flatMap { collection.ownedCopies(it) }
             .sortedWith(
                 compareBy<OwnedCopy> { details[it.printing]?.baseNumber.isNullOrBlank() }
@@ -21,6 +25,6 @@ class CollectionExport(private val collection: CollectionStore, catalog: Catalog
                     .thenBy { it.id.value },
             )
         val locations = collection.locations().associate { it.id to it.name }
-        return CollectionCsv.build(copies, details, locations)
+        return CollectionCsv.build(copies, details, locations, englishNames)
     }
 }

@@ -44,6 +44,8 @@ import tcg.domain.Condition
 import tcg.domain.Language
 import tcg.domain.Location
 import tcg.domain.Printing
+import tcg.domain.collection.productText
+import tcg.domain.collection.treatmentText
 import tcg.domain.scanning.ScanScope
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -313,10 +315,10 @@ internal fun PrintingRow(printing: Printing, modifier: Modifier = Modifier) {
     ) {
         PrintingImage(printing.imageUrl, Modifier.width(64.dp))
         Column(Modifier.weight(1f)) {
-            Text(printing.name, style = MaterialTheme.typography.titleMedium)
+            PrintingHeading(rememberPrintingTitle(printing))
             val variant = printing.variant?.label().orEmpty()
             Text(
-                listOf(printing.baseNumber, variant, printing.rarity, printing.releaseProduct)
+                listOf(printing.baseNumber, variant, printing.rarity, printing.treatmentText.orEmpty(), printing.productText.orEmpty())
                     .filter { it.isNotBlank() }.joinToString(" · "),
                 style = MaterialTheme.typography.bodyMedium,
             )

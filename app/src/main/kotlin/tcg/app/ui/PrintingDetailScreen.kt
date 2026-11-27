@@ -44,6 +44,8 @@ import tcg.domain.Location
 import tcg.domain.LocationId
 import tcg.domain.OwnedCopy
 import tcg.domain.PrintingIdentifier
+import tcg.domain.collection.productText
+import tcg.domain.collection.treatmentText
 import tcg.domain.isCustom
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -67,7 +69,12 @@ fun PrintingDetailScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(entry?.name ?: printing.sourceId) },
+                title = {
+                    val title = entry?.let { rememberPrintingTitle(it) }
+                    if (title != null) {
+                        Column { PrintingHeading(title, MaterialTheme.typography.titleLarge) }
+                    } else Text(printing.sourceId)
+                },
                 navigationIcon = {
                     IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") }
                 },
@@ -78,8 +85,9 @@ fun PrintingDetailScreen(
             val header = listOfNotNull(
                 entry?.baseNumber,
                 printing.language.label(),
-                entry?.rarity,
-                entry?.releaseProduct,
+                entry?.rarity?.takeIf { it.isNotBlank() },
+                entry?.treatmentText,
+                entry?.productText,
                 entry?.variant?.label(),
             )
             Row(

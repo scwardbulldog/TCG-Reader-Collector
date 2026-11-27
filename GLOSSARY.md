@@ -20,7 +20,7 @@ What all **Printings** sharing a **Game** and **Base Number** have in common, ac
 _Avoid_: Card ID, Card number (that is the **Base Number**)
 
 **Card name**:
-What a **Card** is called in a **Language**, read from that Language's **Printings** (Normal preferred). Never an identifier. A Card with no **Printing** in a Language has no name in it, so a JP-only Card has only its Japanese name.
+What a **Card** is called in a **Language**, read from that Language's **Printings** (Normal preferred). Never an identifier. A Card with no **Printing** in a Language has no name in it, so a JP-only Card has only its Japanese name. A **Printing** is headed by its Card's English name as the title, with its own Japanese name as subtext when it is Japanese; a **Custom Printing** is headed by its label, with the Card's English name as subtext.
 _Avoid_: Translation (no name is machine-translated), Printing label (that is a **Custom Printing**'s own text)
 
 **Printing**:

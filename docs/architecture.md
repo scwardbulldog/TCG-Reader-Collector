@@ -36,7 +36,7 @@ Search matches a Base Number or name ignoring case and full-width/half-width for
 | `tcg.domain` | Printing (with its published Variant, Product code and Treatments), Printing identifier, Variant, Owned Copy, Location, and the store interfaces |
 | `tcg.domain.onepiece` | One Piece rules: Base Number recognition in OCR text |
 | `tcg.domain.catalog` | Parsing a Catalog file (`schemaVersion` 2 only), `CatalogUpdater`, and `CatalogRefresh` (the refresh rules; format: [catalog-format.md](catalog-format.md)) |
-| `tcg.domain.collection` | Collection list and filters, Printing detail, Custom Printings, `Cards` and `Card` (derived from the Printings; Card names; name search in both Languages with the full-width fold), `PrintingResolver` (Catalog or Custom row for an Owned Copy), CSV export |
+| `tcg.domain.collection` | Collection list and filters, Printing detail, Custom Printings, `Cards` and `Card` (derived from the Printings; Card names; name search in both Languages with the full-width fold), `PrintingTitles` (a Printing's English title with Japanese subtext, plus Treatment and Product code text helpers), `PrintingResolver` (Catalog or Custom row for an Owned Copy), CSV export (with the Card's `English name` column) |
 | `tcg.domain.scanning` | Scan Session, lookup and manual search, `BaseNumberLocker`, Bulk Add (`Batch`, `BulkCapture`) |
 | `tcg.domain.backup` | The versioned JSON backup format, validation, atomic restore, reminders |
 
@@ -67,6 +67,7 @@ Today the state that ties this together (the open confirmation, Language switchi
 | --- | --- |
 | A scan or search rule | `domain/.../scanning/ScanSessionInput.kt` |
 | Card grouping, Card names or name matching | `domain/.../collection/Card.kt`, `domain/.../SearchText.kt` |
+| How a Printing is titled (English title, Japanese subtext) | `domain/.../collection/PrintingTitle.kt`; the screens read it through `rememberPrintingTitle` in `app/.../ui/Labels.kt` |
 | Bulk Add merging or review rows | `domain/.../scanning/Batch.kt`, `BulkCapture.kt` |
 | What the Collection list shows | `domain/.../collection/CollectionList.kt` |
 | Backup or restore | `domain/.../backup/` (file reading and writing is in `MainActivity`) |

@@ -3,9 +3,37 @@ package tcg.app.ui
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.produceState
+import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.ui.text.TextStyle
 import tcg.domain.Condition
 import tcg.domain.Language
+import tcg.domain.Printing
 import tcg.domain.Variant
+import tcg.domain.collection.PrintingTitle
+import tcg.domain.collection.PrintingTitles
+
+/** Where views get Card names to title a Printing; provided once at the root. */
+val LocalPrintingTitles = staticCompositionLocalOf<PrintingTitles> { error("PrintingTitles not provided") }
+
+/**
+ * The title of [printing]. It shows the Printing's own name first, then the English title and Japanese subtext
+ * once the Catalog lookup returns.
+ */
+@Composable
+fun rememberPrintingTitle(printing: Printing): PrintingTitle {
+    val titles = LocalPrintingTitles.current
+    return produceState(PrintingTitle.of(printing, null), printing, titles) {
+        value = titles.of(printing)
+    }.value
+}
+
+/** A title with its smaller subtext beneath. */
+@Composable
+fun PrintingHeading(title: PrintingTitle, titleStyle: TextStyle = MaterialTheme.typography.titleMedium) {
+    Text(title.title, style = titleStyle)
+    title.subtitle?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
+}
 
 /** Shown where a Printing's details are the last-known ones because a Catalog refresh dropped it. */
 @Composable

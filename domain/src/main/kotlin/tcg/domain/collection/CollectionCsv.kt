@@ -12,22 +12,26 @@ import tcg.domain.Variant
 /** The Collection as CSV text for Google Sheets: one row per Owned Copy, no quantity column. */
 object CollectionCsv {
     private val columns = listOf(
-        "Game", "Language", "Base Number", "Printing identifier", "Name", "Variant",
+        "Game", "Language", "Base Number", "Printing identifier", "Name", "English name", "Variant",
         "Release Product", "Condition", "Location", "Notes",
     )
 
-    /** [details] and [locations] may lack entries; the matching cells are then blank. */
+    /**
+     * [details], [locations] and [englishNames] (the Card's English name per Printing) may lack entries; the
+     * matching cells are then blank. `Name` is the Printing's own name.
+     */
     fun build(
         copies: List<OwnedCopy>,
         details: Map<PrintingIdentifier, Printing>,
         locations: Map<LocationId, String>,
-    ): String = (listOf(columns) + copies.map { row(it, details[it.printing], locations) })
+        englishNames: Map<PrintingIdentifier, String> = emptyMap(),
+    ): String = (listOf(columns) + copies.map { row(it, details[it.printing], locations, englishNames[it.printing]) })
         .joinToString("") { cells -> cells.joinToString(",", transform = ::escape) + "\r\n" }
 
     private fun escape(cell: String): String =
         if (cell.any { it == ',' || it == '"' || it == '\n' || it == '\r' }) "\"" + cell.replace("\"", "\"\"") + "\"" else cell
 
-    private fun row(copy: OwnedCopy, printing: Printing?, locations: Map<LocationId, String>): List<String> {
+    private fun row(copy: OwnedCopy, printing: Printing?, locations: Map<LocationId, String>, englishName: String?): List<String> {
         val id = copy.printing
         return listOf(
             id.game.code(),
@@ -35,6 +39,7 @@ object CollectionCsv {
             printing?.baseNumber.orEmpty(),
             "${id.game.code()} / ${id.language.code()} / ${id.sourceId}",
             printing?.name.orEmpty(),
+            englishName.orEmpty(),
             printing?.variant?.label().orEmpty(),
             printing?.releaseProduct.orEmpty(),
             copy.condition.label(),

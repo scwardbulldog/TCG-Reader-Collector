@@ -40,10 +40,10 @@ class CollectionExportTest {
 
         assertEquals(
             listOf(
-                "onepiece,EN,OP01-001,onepiece / EN / OP01-001,Roronoa Zoro,Normal,Romance Dawn,Near Mint,Binder A,first",
-                "onepiece,EN,OP01-001,onepiece / EN / OP01-001,Roronoa Zoro,Normal,Romance Dawn,Damaged,,second",
-                "onepiece,EN,OP01-016,onepiece / EN / OP01-016,Nami,Normal,Romance Dawn,Near Mint,,",
-                "onepiece,JP,,onepiece / JP / OP05-007,,,,Near Mint,,",
+                "onepiece,EN,OP01-001,onepiece / EN / OP01-001,Roronoa Zoro,Roronoa Zoro,Normal,Romance Dawn,Near Mint,Binder A,first",
+                "onepiece,EN,OP01-001,onepiece / EN / OP01-001,Roronoa Zoro,Roronoa Zoro,Normal,Romance Dawn,Damaged,,second",
+                "onepiece,EN,OP01-016,onepiece / EN / OP01-016,Nami,,Normal,Romance Dawn,Near Mint,,",
+                "onepiece,JP,,onepiece / JP / OP05-007,,,,,Near Mint,,",
             ),
             rows,
         )

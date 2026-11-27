@@ -209,7 +209,8 @@ private fun CollectionRowItem(row: CollectionRow, onClick: () -> Unit) {
     ) {
         PrintingImage(row.details?.imageUrl, Modifier.width(48.dp))
         Column(Modifier.weight(1f)) {
-            Text(row.name ?: row.printing.sourceId, style = MaterialTheme.typography.titleMedium)
+            val title = row.details?.let { rememberPrintingTitle(it) }
+            if (title != null) PrintingHeading(title) else Text(row.printing.sourceId, style = MaterialTheme.typography.titleMedium)
             val details = listOfNotNull(row.baseNumber, row.printing.language.label(), variant)
             Text(details.joinToString(" · "), style = MaterialTheme.typography.bodyMedium)
             if (row.noLongerInCatalog) NoLongerInCatalogFlag()

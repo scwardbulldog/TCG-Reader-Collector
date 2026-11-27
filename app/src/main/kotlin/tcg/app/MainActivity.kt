@@ -10,6 +10,7 @@ import androidx.activity.viewModels
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -36,6 +37,7 @@ import tcg.app.ui.BackupViewModel
 import tcg.app.ui.CollectionActions
 import tcg.app.ui.CollectionScreen
 import tcg.app.ui.CollectionViewModel
+import tcg.app.ui.LocalPrintingTitles
 import tcg.app.ui.PrintingDetailScreen
 import tcg.app.ui.PrintingDetailViewModel
 import tcg.app.ui.ScanSessionScreen
@@ -48,6 +50,7 @@ import tcg.domain.backup.CollectionBackup
 import tcg.domain.collection.CollectionExport
 import tcg.domain.collection.CollectionList
 import tcg.domain.collection.PrintingDetail
+import tcg.domain.collection.PrintingTitles
 import java.io.IOException
 import java.nio.ByteBuffer
 import java.nio.charset.CharacterCodingException
@@ -88,17 +91,19 @@ class MainActivity : ComponentActivity() {
         if (savedInstanceState == null) updateCatalog()
         setContent {
             MaterialTheme {
-                CollectionApp(
-                    database = database,
-                    backup = backupViewModel,
-                    updatingCatalog = updating,
-                    catalogRevision = catalogRevision,
-                    snackbarHostState = catalogMessages,
-                    onUpdateCatalog = ::updateCatalog,
-                    onExportCsv = { exportTarget.launch("tcg-collection-${LocalDate.now()}.csv") },
-                    onBackup = { backupTarget.launch("tcg-collection-backup-${LocalDate.now()}.json") },
-                    onRestore = { restoreSource.launch(arrayOf("*/*")) },
-                )
+                CompositionLocalProvider(LocalPrintingTitles provides remember { PrintingTitles(database.catalogStore()) }) {
+                    CollectionApp(
+                        database = database,
+                        backup = backupViewModel,
+                        updatingCatalog = updating,
+                        catalogRevision = catalogRevision,
+                        snackbarHostState = catalogMessages,
+                        onUpdateCatalog = ::updateCatalog,
+                        onExportCsv = { exportTarget.launch("tcg-collection-${LocalDate.now()}.csv") },
+                        onBackup = { backupTarget.launch("tcg-collection-backup-${LocalDate.now()}.json") },
+                        onRestore = { restoreSource.launch(arrayOf("*/*")) },
+                    )
+                }
             }
         }
     }

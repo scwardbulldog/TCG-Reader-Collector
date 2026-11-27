@@ -13,7 +13,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 
 class CollectionCsvTest {
-    private val header = "Game,Language,Base Number,Printing identifier,Name,Variant,Release Product,Condition,Location,Notes"
+    private val header = "Game,Language,Base Number,Printing identifier,Name,English name,Variant,Release Product,Condition,Location,Notes"
 
     private val zoro = PrintingIdentifier(Game.OnePiece, Language.English, "OP01-001_p1")
     private val zoroDetails = Printing(zoro, "OP01-001", "Romance Dawn", "L", "Roronoa Zoro", "https://example.test/zoro.png", Variant.AlternateArt)
@@ -30,7 +30,8 @@ class CollectionCsvTest {
         copies: List<OwnedCopy>,
         details: Map<PrintingIdentifier, Printing> = mapOf(zoro to zoroDetails),
         locations: Map<LocationId, String> = emptyMap(),
-    ) = CollectionCsv.build(copies, details, locations)
+        englishNames: Map<PrintingIdentifier, String> = emptyMap(),
+    ) = CollectionCsv.build(copies, details, locations, englishNames)
 
     @Test
     fun `an Owned Copy becomes one row with the listed columns in order`() {
@@ -42,10 +43,21 @@ class CollectionCsvTest {
         assertEquals(
             listOf(
                 header,
-                "onepiece,EN,OP01-001,onepiece / EN / OP01-001_p1,Roronoa Zoro,Alternate Art,Romance Dawn,Lightly Played,Binder A,sleeved",
+                "onepiece,EN,OP01-001,onepiece / EN / OP01-001_p1,Roronoa Zoro,,Alternate Art,Romance Dawn,Lightly Played,Binder A,sleeved",
             ),
             text.lines().filter { it.isNotEmpty() },
         )
+    }
+
+    @Test
+    fun `the English name column holds the Card's English name, quoted, and leaves Name as the Printing's own`() {
+        val japanese = PrintingIdentifier(Game.OnePiece, Language.Japanese, "OP01-001")
+        val details = Printing(japanese, "OP01-001", "ROMANCE DAWN", "L", "ロロノア・ゾロ", "", Variant.Normal)
+
+        val table = parseCsv(csv(listOf(copy(1, printing = japanese)), mapOf(japanese to details), englishNames = mapOf(japanese to "Zoro, Roronoa")))
+
+        assertEquals("ロロノア・ゾロ", table[1][4])
+        assertEquals("Zoro, Roronoa", table[1][5])
     }
 
     @Test
@@ -55,7 +67,7 @@ class CollectionCsvTest {
         val text = csv(listOf(copy(1, printing = gone, condition = Condition.Damaged)), details = emptyMap())
 
         assertEquals(
-            listOf(header, "onepiece,JP,,onepiece / JP / OP09-999,,,,Damaged,,"),
+            listOf(header, "onepiece,JP,,onepiece / JP / OP09-999,,,,,Damaged,,"),
             text.lines().filter { it.isNotEmpty() },
         )
     }
@@ -76,9 +88,9 @@ class CollectionCsvTest {
         val table = parseCsv(csv(listOf(copy(1, notes = notes), copy(2, notes = "plain"))))
 
         assertEquals(3, table.size)
-        assertEquals(10, table[1].size)
-        assertEquals(notes, table[1][9])
-        assertEquals("plain", table[2][9])
+        assertEquals(11, table[1].size)
+        assertEquals(notes, table[1][10])
+        assertEquals("plain", table[2][10])
     }
 
     /** A minimal RFC 4180 reader, so the escaping is checked against the standard rather than the builder. */
