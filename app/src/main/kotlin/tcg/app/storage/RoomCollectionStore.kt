@@ -12,6 +12,7 @@ import tcg.domain.OwnedCopy
 import tcg.domain.OwnedCopyId
 import tcg.domain.Printing
 import tcg.domain.PrintingIdentifier
+import tcg.domain.isCustom
 
 class RoomCollectionStore(private val dao: CollectionDao) : CollectionStore {
     override suspend fun add(copy: NewOwnedCopy): OwnedCopy {
@@ -55,11 +56,13 @@ class RoomCollectionStore(private val dao: CollectionDao) : CollectionStore {
     override suspend fun countsByPrinting(): Map<PrintingIdentifier, Int> =
         dao.countsByPrinting().associate { PrintingIdentifier(it.game, it.language, it.sourceId) to it.ownedCopyCount }
 
-    override suspend fun rememberPrintings(printings: List<Printing>) =
-        dao.upsertKnownPrintings(printings.map { it.toKnownEntity() })
+    override suspend fun saveCustomPrinting(printing: Printing) {
+        require(printing.identifier.isCustom) { "Only a Custom Printing can be saved here" }
+        dao.upsertCustomPrintings(listOf(printing.toEntity()))
+    }
 
-    override suspend fun lastKnownPrinting(identifier: PrintingIdentifier): Printing? =
-        dao.knownPrinting(identifier.game, identifier.language, identifier.sourceId)?.toDomain()
+    override suspend fun customPrinting(identifier: PrintingIdentifier): Printing? =
+        dao.customPrinting(identifier.game, identifier.language, identifier.sourceId)?.toDomain()
 
     override suspend fun customPrintings(game: Game, language: Language): List<Printing> =
         dao.customPrintings(game, language).map { it.toDomain() }
@@ -101,31 +104,9 @@ class RoomCollectionStore(private val dao: CollectionDao) : CollectionStore {
                 notes = it.notes,
             )
         },
-        snapshot.customPrintings.map { it.toKnownEntity() },
+        snapshot.customPrintings.map { it.toEntity() },
     )
 }
-
-private fun Printing.toKnownEntity() = KnownPrintingEntity(
-    game = identifier.game,
-    language = identifier.language,
-    sourceId = identifier.sourceId,
-    baseNumber = baseNumber,
-    releaseProduct = releaseProduct,
-    rarity = rarity,
-    name = name,
-    imageUrl = imageUrl,
-)
-
-private fun KnownPrintingEntity.toDomain() = Printing(
-    identifier = PrintingIdentifier(game, language, sourceId),
-    baseNumber = baseNumber,
-    releaseProduct = releaseProduct,
-    rarity = rarity,
-    name = name,
-    imageUrl = imageUrl,
-    // Variant, Product code and Treatments are not stored until the v2 Room migration (slice E).
-    variant = null,
-)
 
 private fun OwnedCopyEntity.toDomain() = OwnedCopy(
     id = OwnedCopyId(id),

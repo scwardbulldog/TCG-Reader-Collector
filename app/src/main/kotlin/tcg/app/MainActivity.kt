@@ -47,7 +47,6 @@ import tcg.domain.catalog.CatalogUpdater
 import tcg.domain.backup.CollectionBackup
 import tcg.domain.collection.CollectionExport
 import tcg.domain.collection.CollectionList
-import tcg.domain.collection.LastKnownPrintings
 import tcg.domain.collection.PrintingDetail
 import java.io.IOException
 import java.nio.ByteBuffer
@@ -81,7 +80,6 @@ class MainActivity : ComponentActivity() {
         CatalogUpdater(
             source = GitHubCatalogSource(BuildConfig.CATALOG_REPO, BuildConfig.CATALOG_TOKEN),
             store = database.catalogStore(),
-            beforeReplace = LastKnownPrintings(database.collectionStore(), database.catalogStore())::remember,
         )
     }
 

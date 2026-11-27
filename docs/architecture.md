@@ -27,7 +27,7 @@ Each interface below is defined in `domain` and implemented in `app`; tests use 
 | `PhotoSource` | Reading a Base Number from a Bulk Add photo, and deleting it | `CachePhotoSource` | `ScriptedSource`, private to `BulkCaptureTest` |
 | `LanguageStore` | The remembered scan Language | `SharedPreferencesLanguageStore` | `InMemoryLanguageStore` |
 
-The Catalog and the Collection are stored apart: a Catalog refresh never touches the Collection ([ADR 0003](adr/0003-phone-only-storage-no-backend.md)). **v2** changes the tables, the refresh rules and the migration: see [v2 spec](spec/v2.md) sections 4 and 5 and [ADR 0004](adr/0004-v2-card-model-derived-card-bandai-authoritative.md).
+The Catalog and the Collection are stored apart: a Catalog refresh never touches the Collection's Owned Copies or Locations ([ADR 0003](adr/0003-phone-only-storage-no-backend.md)). Catalog and Custom Printings share one `printing` table, told apart by `origin`. A refresh is a single transaction in `CatalogDao.replaceAll`, planned by the pure `CatalogRefresh`: a dropped Printing that an Owned Copy uses is kept and flagged **No longer in the Catalog**, an unused one is deleted, a listed one takes the new details and clears the flag, and Custom rows are never touched. Room migration 4 to 5 builds the table from `known_printing` ([v2 spec](spec/v2.md) sections 4 and 5, [ADR 0004](adr/0004-v2-card-model-derived-card-bandai-authoritative.md)).
 
 ## Packages in `domain`
 
@@ -35,8 +35,8 @@ The Catalog and the Collection are stored apart: a Catalog refresh never touches
 | --- | --- |
 | `tcg.domain` | Printing (with its published Variant, Product code and Treatments), Printing identifier, Variant, Owned Copy, Location, and the store interfaces |
 | `tcg.domain.onepiece` | One Piece rules: Base Number recognition in OCR text |
-| `tcg.domain.catalog` | Parsing a Catalog file (`schemaVersion` 2 only) and `CatalogUpdater` (format: [catalog-format.md](catalog-format.md)) |
-| `tcg.domain.collection` | Collection list and filters, Printing detail, Custom Printings, last-known Printings (**v2**: replaced by a flag on the one Printing table), CSV export |
+| `tcg.domain.catalog` | Parsing a Catalog file (`schemaVersion` 2 only), `CatalogUpdater`, and `CatalogRefresh` (the refresh rules; format: [catalog-format.md](catalog-format.md)) |
+| `tcg.domain.collection` | Collection list and filters, Printing detail, Custom Printings, `PrintingResolver` (Catalog or Custom row for an Owned Copy), CSV export |
 | `tcg.domain.scanning` | Scan Session, lookup and manual search, `BaseNumberLocker`, Bulk Add (`Batch`, `BulkCapture`) |
 | `tcg.domain.backup` | The versioned JSON backup format, validation, atomic restore, reminders |
 

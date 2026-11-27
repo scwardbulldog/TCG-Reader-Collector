@@ -12,14 +12,15 @@ import tcg.domain.Variant
 /** One Collection list row: a Printing and how many Owned Copies of it exist. */
 data class CollectionRow(
     val printing: PrintingIdentifier,
-    /** The Catalog's details, or the last-known ones when [noLongerInCatalog]; null for an Unresolved Printing. */
+    /** The Printing's details, which are the last-known ones when [noLongerInCatalog]; null for an Unresolved Printing. */
     val details: Printing?,
     val ownedCopyCount: Int,
-    /** A Catalog refresh dropped this Printing, so [details] are the last-known ones. */
-    val noLongerInCatalog: Boolean = false,
 ) {
     val baseNumber: String? get() = details?.baseNumber?.takeIf { it.isNotBlank() }
     val name: String? get() = details?.name
+
+    /** A Catalog refresh dropped this Printing, so [details] are the last-known ones. */
+    val noLongerInCatalog: Boolean get() = details?.noLongerInCatalog == true
 
     /** The Catalog has never had this Printing (e.g. after a restore): only its identifier is known. */
     val unresolved: Boolean get() = details == null
@@ -37,7 +38,7 @@ data class CollectionFilter(
 
 /** The Collection grouped by Printing, with search, filters and the default display order. */
 class CollectionList(private val collection: CollectionStore, catalog: CatalogStore) {
-    private val printings = LastKnownPrintings(collection, catalog)
+    private val printings = PrintingResolver(collection, catalog)
 
     suspend fun rows(search: String = "", filter: CollectionFilter = CollectionFilter()): List<CollectionRow> =
         collection.countsByPrinting()
@@ -48,7 +49,7 @@ class CollectionList(private val collection: CollectionStore, catalog: CatalogSt
     /** The Release Products of every owned Printing whose details are known, for choosing a filter. */
     suspend fun releaseProducts(): List<String> =
         collection.countsByPrinting().keys
-            .mapNotNull { printings.resolve(it)?.printing?.releaseProduct?.takeIf(String::isNotBlank) }
+            .mapNotNull { printings.resolve(it)?.releaseProduct?.takeIf(String::isNotBlank) }
             .distinct()
             .sorted()
 
@@ -56,13 +57,12 @@ class CollectionList(private val collection: CollectionStore, catalog: CatalogSt
     suspend fun locations(): List<Location> = collection.locations()
 
     private suspend fun row(printing: PrintingIdentifier, count: Int, filter: CollectionFilter): CollectionRow? {
-        val entry = printings.resolve(printing)
-        val details = entry?.printing
+        val details = printings.resolve(printing)
         if (filter.language != null && printing.language != filter.language) return null
         if (filter.releaseProduct != null && details?.releaseProduct != filter.releaseProduct) return null
         if (filter.variant != null && (details == null || details.variant != filter.variant)) return null
         val copies = if (filter.location == null) count else collection.ownedCopies(printing).count { it.location == filter.location }
-        return if (copies == 0) null else CollectionRow(printing, details, copies, entry?.noLongerInCatalog ?: false)
+        return if (copies == 0) null else CollectionRow(printing, details, copies)
     }
 
     private fun CollectionRow.matches(query: String): Boolean = when {

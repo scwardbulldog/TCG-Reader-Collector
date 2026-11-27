@@ -34,7 +34,7 @@ class CustomPrintings(
             imageUrl = "",
             variant = null,
         )
-        collection.rememberPrintings(listOf(printing))
+        collection.saveCustomPrinting(printing)
         return printing
     }
 
@@ -43,7 +43,7 @@ class CustomPrintings(
         val name = label.trim()
         require(name.isNotEmpty()) { "A Custom Printing needs a label" }
         val existing = find(identifier) ?: return null
-        return existing.copy(name = name).also { collection.rememberPrintings(listOf(it)) }
+        return existing.copy(name = name).also { collection.saveCustomPrinting(it) }
     }
 
     /** Deletes the Custom Printing unless an Owned Copy still uses it. */
@@ -65,7 +65,7 @@ class CustomPrintings(
         }
 
     private suspend fun find(identifier: PrintingIdentifier): Printing? =
-        if (identifier.isCustom) collection.lastKnownPrinting(identifier) else null
+        if (identifier.isCustom) collection.customPrinting(identifier) else null
 
     companion object {
         const val RELEASE_PRODUCT = "Custom"

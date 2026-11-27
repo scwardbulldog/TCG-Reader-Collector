@@ -22,15 +22,10 @@ import kotlin.test.assertTrue
 /** A Collection restored from a backup before the Catalog knows its Printings. */
 class UnresolvedPrintingTest {
     private val source = FakeCatalogSource()
-    private val catalog = InMemoryCatalogStore()
     private val collection = InMemoryCollectionStore()
+    private val catalog = InMemoryCatalogStore(collection)
     private val list = CollectionList(collection, catalog)
-    private val updater = CatalogUpdater(
-        source,
-        catalog,
-        listOf(CatalogTarget(Game.OnePiece, Language.English)),
-        beforeReplace = LastKnownPrintings(collection, catalog)::remember,
-    )
+    private val updater = CatalogUpdater(source, catalog, listOf(CatalogTarget(Game.OnePiece, Language.English)))
 
     private val zoro = PrintingIdentifier(Game.OnePiece, Language.English, "OP01-001_p1")
     private val nami = PrintingIdentifier(Game.OnePiece, Language.English, "OP01-016")

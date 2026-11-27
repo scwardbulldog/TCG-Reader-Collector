@@ -1,22 +1,27 @@
 package tcg.domain
 
-/** The Catalog: every Printing the app knows about. Stored apart from the Collection. */
+/**
+ * The Catalog: every Printing the app knows about. Stored apart from the Collection in effect (a refresh never
+ * changes an Owned Copy), though in one Printing table with the Custom Printings.
+ */
 interface CatalogStore {
     /**
-     * Replaces all Printings of one Game and Language, and the [version] they came from, in one
-     * transaction. Never touches the Collection.
+     * Refreshes all Catalog Printings of one Game and Language, and the [version] they came from, in one
+     * transaction, by the [tcg.domain.catalog.CatalogRefresh] rules: a dropped Printing an Owned Copy uses stays
+     * flagged, an unused one goes. Never touches an Owned Copy or a Custom Printing.
      */
     suspend fun replaceCatalog(game: Game, language: Language, printings: List<Printing>, version: String? = null)
 
     /** The source version of the stored Catalog for one Game and Language; null if none was recorded. */
     suspend fun catalogVersion(game: Game, language: Language): String?
 
+    /** A Catalog row, including one flagged as no longer in the Catalog; never a Custom Printing. */
     suspend fun find(identifier: PrintingIdentifier): Printing?
 
-    /** Base Number is a lookup aid, so several Printings (Variants) can match. */
+    /** Base Number is a lookup aid, so several Printings (Variants) can match. Flagged rows are not offered. */
     suspend fun findByBaseNumber(game: Game, language: Language, baseNumber: String): List<Printing>
 
-    /** Printings of one Game and Language whose Base Number or name contains [query], ignoring case. */
+    /** Printings of one Game and Language whose Base Number or name contains [query], ignoring case. Flagged rows are not offered. */
     suspend fun search(game: Game, language: Language, query: String): List<Printing>
 }
 
@@ -41,19 +46,16 @@ interface CollectionStore {
     /** How many Owned Copies each Printing has. */
     suspend fun countsByPrinting(): Map<PrintingIdentifier, Int>
 
-    /** Saves the details of Printings Owned Copies refer to, replacing earlier ones, so they outlive a Catalog refresh. */
-    suspend fun rememberPrintings(printings: List<Printing>)
+    /** Saves a Custom Printing, replacing an earlier one with the same identifier. A Catalog refresh never touches it. */
+    suspend fun saveCustomPrinting(printing: Printing)
 
-    /** The details last saved by [rememberPrintings]; null if none were. */
-    suspend fun lastKnownPrinting(identifier: PrintingIdentifier): Printing?
+    /** The Custom Printing with [identifier]; null if there is none. */
+    suspend fun customPrinting(identifier: PrintingIdentifier): Printing?
 
-    /**
-     * The Custom Printings of one Game and Language. They are saved with [rememberPrintings], which keeps them
-     * apart from the Catalog, and a Catalog refresh never touches them.
-     */
+    /** The Custom Printings of one Game and Language. */
     suspend fun customPrintings(game: Game, language: Language): List<Printing>
 
-    /** Removes a Custom Printing's saved details. Callers make sure no Owned Copy still uses it. */
+    /** Removes a Custom Printing. Callers make sure no Owned Copy still uses it. */
     suspend fun deleteCustomPrinting(identifier: PrintingIdentifier)
 
     suspend fun createLocation(name: String): Location
@@ -69,7 +71,7 @@ interface CollectionStore {
 
     /**
      * Replaces the whole Collection (Owned Copies, Locations and Custom Printings) with [snapshot],
-     * keeping its ids and dropping saved last-known Printings. Atomic: a failure part-way leaves the existing Collection unchanged.
+     * keeping its ids and leaving Catalog rows as they are. Atomic: a failure part-way leaves the existing Collection unchanged.
      */
     suspend fun replaceCollection(snapshot: CollectionSnapshot)
 }

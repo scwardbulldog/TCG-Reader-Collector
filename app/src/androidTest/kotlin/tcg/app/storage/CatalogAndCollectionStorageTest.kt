@@ -19,6 +19,7 @@ import tcg.domain.OwnedCopy
 import tcg.domain.OwnedCopyId
 import tcg.domain.Printing
 import tcg.domain.PrintingIdentifier
+import tcg.domain.Variant
 import tcg.domain.backup.BackupStatus
 import java.time.Instant
 import kotlin.test.assertEquals
@@ -50,33 +51,72 @@ class CatalogAndCollectionStorageTest {
 
         catalog.replaceCatalog(Game.OnePiece, Language.English, emptyList())
 
-        assertNull(catalog.find(zoro))
         assertEquals(before, collection.ownedCopies(zoro))
     }
 
     @Test
-    fun last_known_printing_details_survive_a_catalog_refresh_that_drops_the_printing() = runTest {
+    fun a_dropped_printing_an_owned_copy_uses_stays_flagged_with_its_details_and_an_unused_one_is_deleted() = runTest {
         val zoro = PrintingIdentifier(Game.OnePiece, Language.English, "OP01-001_p1")
-        catalog.replaceCatalog(Game.OnePiece, Language.English, listOf(printing(zoro)))
+        val nami = PrintingIdentifier(Game.OnePiece, Language.English, "OP01-016")
+        catalog.replaceCatalog(Game.OnePiece, Language.English, listOf(printing(zoro), printing(nami)))
         val saved = catalog.find(zoro)!!
+        collection.add(NewOwnedCopy(zoro))
 
-        collection.rememberPrintings(listOf(saved))
         catalog.replaceCatalog(Game.OnePiece, Language.English, emptyList())
 
-        assertNull(catalog.find(zoro))
-        assertEquals(saved, collection.lastKnownPrinting(zoro))
-        assertNull(collection.lastKnownPrinting(PrintingIdentifier(Game.OnePiece, Language.English, "OP99-999")))
+        assertEquals(saved.copy(noLongerInCatalog = true), catalog.find(zoro))
+        assertNull(catalog.find(nami))
+        assertEquals(emptyList(), catalog.findByBaseNumber(Game.OnePiece, Language.English, "OP01-001"))
+        assertNull(catalog.find(PrintingIdentifier(Game.OnePiece, Language.English, "OP99-999")))
     }
 
     @Test
-    fun remembering_a_printing_again_replaces_its_saved_details() = runTest {
+    fun a_refresh_gives_an_unchanged_id_new_details_and_clears_the_flag_of_a_returning_printing() = runTest {
         val zoro = PrintingIdentifier(Game.OnePiece, Language.English, "OP01-001_p1")
-        val original = printing(zoro)
+        val nami = PrintingIdentifier(Game.OnePiece, Language.English, "OP01-016")
+        catalog.replaceCatalog(Game.OnePiece, Language.English, listOf(printing(zoro), printing(nami)))
+        collection.add(NewOwnedCopy(zoro))
+        collection.add(NewOwnedCopy(nami))
+        catalog.replaceCatalog(Game.OnePiece, Language.English, listOf(printing(nami)))
+        assertEquals(true, catalog.find(zoro)?.noLongerInCatalog)
 
-        collection.rememberPrintings(listOf(original))
-        collection.rememberPrintings(listOf(original.copy(name = "Renamed")))
+        catalog.replaceCatalog(
+            Game.OnePiece, Language.English,
+            listOf(printing(zoro).copy(name = "Renamed"), printing(nami).copy(name = "Nami (fixed)")),
+        )
 
-        assertEquals("Renamed", collection.lastKnownPrinting(zoro)?.name)
+        assertEquals(printing(zoro).copy(name = "Renamed"), catalog.find(zoro))
+        assertEquals("Nami (fixed)", catalog.find(nami)?.name)
+    }
+
+    @Test
+    fun variant_product_code_and_treatments_are_stored_and_unknown_treatments_stay_unknown() = runTest {
+        val a = PrintingIdentifier(Game.OnePiece, Language.English, "OP01-001_p1")
+        val b = PrintingIdentifier(Game.OnePiece, Language.English, "OP01-001")
+        val c = PrintingIdentifier(Game.OnePiece, Language.English, "OP01-002")
+        val tagged = printing(a).copy(variant = Variant.AlternateArt, productCode = "OP-01", treatments = listOf("Wanted Poster", "Manga"))
+        val plain = printing(b).copy(variant = Variant.Normal, treatments = emptyList())
+        val unknown = printing(c).copy(variant = Variant.Reprint, treatments = null)
+
+        catalog.replaceCatalog(Game.OnePiece, Language.English, listOf(tagged, plain, unknown))
+
+        assertEquals(tagged, catalog.find(a))
+        assertEquals(plain, catalog.find(b))
+        assertEquals(unknown, catalog.find(c))
+    }
+
+    @Test
+    fun a_refresh_never_touches_a_custom_printing() = runTest {
+        val custom = PrintingIdentifier(Game.OnePiece, Language.English, "custom:1")
+        val milk = printing(custom).copy(baseNumber = "OP01-001", releaseProduct = "Custom", name = "Milk Box Stamp")
+        collection.saveCustomPrinting(milk)
+        collection.add(NewOwnedCopy(custom))
+
+        catalog.replaceCatalog(Game.OnePiece, Language.English, listOf(printing(PrintingIdentifier(Game.OnePiece, Language.English, "OP01-016"))))
+        catalog.replaceCatalog(Game.OnePiece, Language.English, emptyList())
+
+        assertEquals(milk, collection.customPrinting(custom))
+        assertNull(catalog.find(custom))
     }
 
     @Test
@@ -217,7 +257,6 @@ class CatalogAndCollectionStorageTest {
         val old = db.collectionStore()
         old.createLocation("Old box")
         old.add(NewOwnedCopy(zoro))
-        old.rememberPrintings(listOf(printing(zoro)))
         val replacement = CollectionSnapshot(
             locations = listOf(Location(LocationId(42), "Binder 1")),
             copies = listOf(
@@ -229,7 +268,6 @@ class CatalogAndCollectionStorageTest {
         collection.replaceCollection(replacement)
 
         assertEquals(replacement, collection.snapshot())
-        assertNull(collection.lastKnownPrinting(zoro))
     }
 
     @Test
@@ -237,7 +275,8 @@ class CatalogAndCollectionStorageTest {
         val custom = PrintingIdentifier(Game.OnePiece, Language.English, "custom:1")
         val zoro = PrintingIdentifier(Game.OnePiece, Language.English, "OP01-001_p1")
         val milk = printing(custom).copy(baseNumber = "OP01-001", releaseProduct = "Custom", name = "Milk Box Stamp")
-        collection.rememberPrintings(listOf(milk, printing(zoro)))
+        catalog.replaceCatalog(Game.OnePiece, Language.English, listOf(printing(zoro)))
+        collection.saveCustomPrinting(milk)
 
         assertEquals(listOf(milk), collection.customPrintings(Game.OnePiece, Language.English))
         assertEquals(emptyList(), collection.customPrintings(Game.OnePiece, Language.Japanese))
@@ -245,18 +284,20 @@ class CatalogAndCollectionStorageTest {
 
         collection.replaceCollection(CollectionSnapshot(emptyList(), emptyList(), listOf(milk)))
         assertEquals(listOf(milk), collection.customPrintings(Game.OnePiece, Language.English))
-        assertNull(collection.lastKnownPrinting(zoro))
+        assertNotNull(catalog.find(zoro))
 
         collection.deleteCustomPrinting(custom)
-        assertNull(collection.lastKnownPrinting(custom))
+        assertNull(collection.customPrinting(custom))
+        assertNotNull(catalog.find(zoro))
     }
 
     @Test
     fun a_replace_that_fails_part_way_leaves_the_old_collection_intact() = runTest {
         val zoro = PrintingIdentifier(Game.OnePiece, Language.English, "OP01-001_p1")
+        val custom = PrintingIdentifier(Game.OnePiece, Language.English, "custom:1")
         val binder = collection.createLocation("Binder 1")
         collection.add(NewOwnedCopy(zoro, location = binder.id, notes = "keep me"))
-        collection.rememberPrintings(listOf(printing(zoro)))
+        collection.saveCustomPrinting(printing(custom))
         val before = collection.snapshot()
         val broken = CollectionSnapshot(
             locations = emptyList(),
@@ -267,7 +308,7 @@ class CatalogAndCollectionStorageTest {
 
         assertTrue(failed.isFailure)
         assertEquals(before, collection.snapshot())
-        assertNotNull(collection.lastKnownPrinting(zoro))
+        assertNotNull(collection.customPrinting(custom))
     }
 
     @Test

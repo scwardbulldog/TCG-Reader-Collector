@@ -15,9 +15,8 @@ import tcg.domain.PrintingIdentifier
 data class PrintingDetailState(
     /** False until [PrintingDetail.load] finishes, so an empty [copies] can be told apart from "not loaded yet". */
     val loaded: Boolean = false,
-    /** The Catalog's details, or the last-known ones when [noLongerInCatalog]; null for an Unresolved Printing. */
+    /** The Printing's details, which are the last-known ones when [noLongerInCatalog]; null for an Unresolved Printing. */
     val details: Printing? = null,
-    val noLongerInCatalog: Boolean = false,
     val copies: List<OwnedCopy> = emptyList(),
     /** How many Owned Copies the Printing has in all, whatever the Location filter hides. */
     val totalCopies: Int = 0,
@@ -27,6 +26,9 @@ data class PrintingDetailState(
 ) {
     /** Loaded, but the Catalog has never had this Printing: only its identifier is known. */
     val unresolved: Boolean get() = loaded && details == null
+
+    /** A Catalog refresh dropped this Printing, so [details] are the last-known ones. */
+    val noLongerInCatalog: Boolean get() = details?.noLongerInCatalog == true
 }
 
 /**
@@ -40,7 +42,7 @@ class PrintingDetail(
     private val location: LocationId? = null,
 ) {
     private val mutableState = MutableStateFlow(PrintingDetailState())
-    private val printings = LastKnownPrintings(collection, catalog)
+    private val printings = PrintingResolver(collection, catalog)
     private val customPrintings = CustomPrintings(collection)
     val state: StateFlow<PrintingDetailState> = mutableState.asStateFlow()
     private var shown: Set<OwnedCopyId> = emptySet()
@@ -49,11 +51,9 @@ class PrintingDetail(
         val all = collection.ownedCopies(printing)
         val copies = all.filter { location == null || it.location == location }
         shown = copies.map { it.id }.toSet()
-        val entry = printings.resolve(printing)
         mutableState.value = PrintingDetailState(
             loaded = true,
-            details = entry?.printing,
-            noLongerInCatalog = entry?.noLongerInCatalog ?: false,
+            details = printings.resolve(printing),
             copies = copies,
             totalCopies = all.size,
             locations = collection.locations(),

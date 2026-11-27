@@ -8,7 +8,7 @@ import tcg.domain.PrintingIdentifier
 
 class RoomCatalogStore(private val dao: CatalogDao) : CatalogStore {
     override suspend fun replaceCatalog(game: Game, language: Language, printings: List<Printing>, version: String?) {
-        dao.replaceAll(game, language, printings.map { it.toEntity() }, version)
+        dao.replaceAll(game, language, printings, version)
     }
 
     override suspend fun catalogVersion(game: Game, language: Language): String? = dao.version(game, language)
@@ -22,25 +22,3 @@ class RoomCatalogStore(private val dao: CatalogDao) : CatalogStore {
     override suspend fun search(game: Game, language: Language, query: String): List<Printing> =
         dao.search(game, language, query.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")).map { it.toDomain() }
 }
-
-private fun Printing.toEntity() = CatalogPrintingEntity(
-    game = identifier.game,
-    language = identifier.language,
-    sourceId = identifier.sourceId,
-    baseNumber = baseNumber,
-    releaseProduct = releaseProduct,
-    rarity = rarity,
-    name = name,
-    imageUrl = imageUrl,
-)
-
-private fun CatalogPrintingEntity.toDomain() = Printing(
-    identifier = PrintingIdentifier(game, language, sourceId),
-    baseNumber = baseNumber,
-    releaseProduct = releaseProduct,
-    rarity = rarity,
-    name = name,
-    imageUrl = imageUrl,
-    // Variant, Product code and Treatments are not stored until the v2 Room migration (slice E).
-    variant = null,
-)

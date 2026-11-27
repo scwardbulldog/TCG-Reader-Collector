@@ -66,19 +66,6 @@ class CollectionBackupTest {
     }
 
     @Test
-    fun `restore drops last-known Printing details so nothing is invented for an Unresolved Printing`() = runTest {
-        seed()
-        collection.rememberPrintings(
-            listOf(tcg.domain.Printing(zoro, "OP01-001", "Romance Dawn", "L", "Roronoa Zoro", "u", Variant.Normal)),
-        )
-        val content = backUp()
-
-        backup.restore(backup.validate(content))
-
-        assertNull(collection.lastKnownPrinting(zoro))
-    }
-
-    @Test
     fun `a damaged or unsupported file is rejected without touching the Collection`() = runTest {
         seed()
         val before = collection.snapshot()

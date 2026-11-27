@@ -8,19 +8,30 @@ import androidx.room.Transaction
 import androidx.room.Update
 import tcg.domain.Game
 import tcg.domain.Language
-
+import tcg.domain.Printing
+import tcg.domain.PrintingIdentifier
+import tcg.domain.catalog.CatalogRefresh
 @Dao
 interface CatalogDao {
-    @Query("DELETE FROM catalog_printing WHERE game = :game AND language = :language")
-    suspend fun deleteAll(game: Game, language: Language)
+    @Query("SELECT * FROM printing WHERE game = :game AND language = :language AND origin = 'Catalog'")
+    suspend fun catalogRows(game: Game, language: Language): List<PrintingEntity>
+
+    @Query("SELECT DISTINCT sourceId FROM owned_copy WHERE game = :game AND language = :language")
+    suspend fun ownedSourceIds(game: Game, language: Language): List<String>
+
+    @Query("DELETE FROM printing WHERE game = :game AND language = :language AND origin = 'Catalog'")
+    suspend fun deleteCatalogRows(game: Game, language: Language)
 
     @Insert
-    suspend fun insertAll(printings: List<CatalogPrintingEntity>)
+    suspend fun insertAll(printings: List<PrintingEntity>)
 
+    /** One transaction: the stored rows, the Owned Copies that use them and the write all see the same moment. */
     @Transaction
-    suspend fun replaceAll(game: Game, language: Language, printings: List<CatalogPrintingEntity>, version: String?) {
-        deleteAll(game, language)
-        insertAll(printings)
+    suspend fun replaceAll(game: Game, language: Language, printings: List<Printing>, version: String?) {
+        val stored = catalogRows(game, language).map { it.toDomain() }
+        val inUse = ownedSourceIds(game, language).mapTo(mutableSetOf()) { PrintingIdentifier(game, language, it) }
+        deleteCatalogRows(game, language)
+        insertAll(CatalogRefresh.apply(stored, printings, inUse).map { it.toEntity() })
         upsertVersion(CatalogVersionEntity(game, language, version))
     }
 
@@ -30,17 +41,20 @@ interface CatalogDao {
     @Query("SELECT version FROM catalog_version WHERE game = :game AND language = :language")
     suspend fun version(game: Game, language: Language): String?
 
-    @Query("SELECT * FROM catalog_printing WHERE game = :game AND language = :language AND sourceId = :sourceId")
-    suspend fun find(game: Game, language: Language, sourceId: String): CatalogPrintingEntity?
-
-    @Query("SELECT * FROM catalog_printing WHERE game = :game AND language = :language AND baseNumber = :baseNumber")
-    suspend fun findByBaseNumber(game: Game, language: Language, baseNumber: String): List<CatalogPrintingEntity>
+    @Query("SELECT * FROM printing WHERE game = :game AND language = :language AND sourceId = :sourceId AND origin = 'Catalog'")
+    suspend fun find(game: Game, language: Language, sourceId: String): PrintingEntity?
 
     @Query(
-        "SELECT * FROM catalog_printing WHERE game = :game AND language = :language AND " +
+        "SELECT * FROM printing WHERE game = :game AND language = :language AND baseNumber = :baseNumber " +
+            "AND origin = 'Catalog' AND noLongerInCatalog = 0",
+    )
+    suspend fun findByBaseNumber(game: Game, language: Language, baseNumber: String): List<PrintingEntity>
+
+    @Query(
+        "SELECT * FROM printing WHERE game = :game AND language = :language AND origin = 'Catalog' AND noLongerInCatalog = 0 AND " +
             "(baseNumber LIKE '%' || :pattern || '%' ESCAPE '\\' OR name LIKE '%' || :pattern || '%' ESCAPE '\\')",
     )
-    suspend fun search(game: Game, language: Language, pattern: String): List<CatalogPrintingEntity>
+    suspend fun search(game: Game, language: Language, pattern: String): List<PrintingEntity>
 }
 
 @Dao
@@ -65,18 +79,18 @@ interface CollectionDao {
     suspend fun countsByPrinting(): List<PrintingCount>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun upsertKnownPrintings(printings: List<KnownPrintingEntity>)
+    suspend fun upsertCustomPrintings(printings: List<PrintingEntity>)
 
-    @Query("SELECT * FROM known_printing WHERE game = :game AND language = :language AND sourceId = :sourceId")
-    suspend fun knownPrinting(game: Game, language: Language, sourceId: String): KnownPrintingEntity?
+    @Query("SELECT * FROM printing WHERE game = :game AND language = :language AND sourceId = :sourceId AND origin = 'Custom'")
+    suspend fun customPrinting(game: Game, language: Language, sourceId: String): PrintingEntity?
 
-    @Query("SELECT * FROM known_printing WHERE game = :game AND language = :language AND sourceId LIKE 'custom:%'")
-    suspend fun customPrintings(game: Game, language: Language): List<KnownPrintingEntity>
+    @Query("SELECT * FROM printing WHERE game = :game AND language = :language AND origin = 'Custom'")
+    suspend fun customPrintings(game: Game, language: Language): List<PrintingEntity>
 
-    @Query("SELECT * FROM known_printing WHERE sourceId LIKE 'custom:%'")
-    suspend fun allCustomPrintings(): List<KnownPrintingEntity>
+    @Query("SELECT * FROM printing WHERE origin = 'Custom'")
+    suspend fun allCustomPrintings(): List<PrintingEntity>
 
-    @Query("DELETE FROM known_printing WHERE game = :game AND language = :language AND sourceId = :sourceId AND sourceId LIKE 'custom:%'")
+    @Query("DELETE FROM printing WHERE game = :game AND language = :language AND sourceId = :sourceId AND origin = 'Custom'")
     suspend fun deleteCustomPrinting(game: Game, language: Language, sourceId: String)
 
     @Insert
@@ -113,23 +127,23 @@ interface CollectionDao {
     @Query("DELETE FROM location")
     suspend fun deleteAllLocations()
 
-    @Query("DELETE FROM known_printing")
-    suspend fun deleteAllKnownPrintings()
+    @Query("DELETE FROM printing WHERE origin = 'Custom'")
+    suspend fun deleteAllCustomPrintings()
 
     /** One transaction, so the Locations, Owned Copies and Custom Printings are read as of the same moment. */
     @Transaction
-    suspend fun snapshot(): Triple<List<LocationEntity>, List<OwnedCopyEntity>, List<KnownPrintingEntity>> =
+    suspend fun snapshot(): Triple<List<LocationEntity>, List<OwnedCopyEntity>, List<PrintingEntity>> =
         Triple(locations(), allCopies(), allCustomPrintings())
 
     /** One transaction: a failed insert rolls back the deletes too, leaving the old Collection in place. */
     @Transaction
-    suspend fun replaceAll(locations: List<LocationEntity>, copies: List<OwnedCopyEntity>, customPrintings: List<KnownPrintingEntity>) {
+    suspend fun replaceAll(locations: List<LocationEntity>, copies: List<OwnedCopyEntity>, customPrintings: List<PrintingEntity>) {
         deleteAllCopies()
         deleteAllLocations()
-        deleteAllKnownPrintings()
+        deleteAllCustomPrintings()
         insertLocations(locations)
         insertAll(copies)
-        upsertKnownPrintings(customPrintings)
+        upsertCustomPrintings(customPrintings)
     }
 }
 

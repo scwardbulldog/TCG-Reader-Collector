@@ -31,14 +31,9 @@ import kotlin.test.assertTrue
 
 class CustomPrintingsTest {
     private val source = FakeCatalogSource()
-    private val catalog = InMemoryCatalogStore()
     private val collection = InMemoryCollectionStore()
-    private val updater = CatalogUpdater(
-        source,
-        catalog,
-        listOf(CatalogTarget(Game.OnePiece, Language.English)),
-        beforeReplace = LastKnownPrintings(collection, catalog)::remember,
-    )
+    private val catalog = InMemoryCatalogStore(collection)
+    private val updater = CatalogUpdater(source, catalog, listOf(CatalogTarget(Game.OnePiece, Language.English)))
     private var ids = 0
     private val custom = CustomPrintings(collection, newId = { "id${ids++}" })
 
@@ -153,11 +148,11 @@ class CustomPrintingsTest {
         val copy = collection.add(NewOwnedCopy(printing.identifier))
 
         assertEquals(DeleteCustomPrintingResult.InUse, custom.delete(printing.identifier))
-        assertNotNull(collection.lastKnownPrinting(printing.identifier))
+        assertNotNull(collection.customPrinting(printing.identifier))
 
         collection.delete(copy.id)
         assertEquals(DeleteCustomPrintingResult.Deleted, custom.delete(printing.identifier))
-        assertNull(collection.lastKnownPrinting(printing.identifier))
+        assertNull(collection.customPrinting(printing.identifier))
         assertEquals(DeleteCustomPrintingResult.NotFound, custom.delete(printing.identifier))
         assertEquals(
             DeleteCustomPrintingResult.NotFound,
@@ -180,7 +175,7 @@ class CustomPrintingsTest {
         detail.confirmDelete(alsoDeleteCustomPrinting = true)
 
         assertTrue(detail.state.value.copies.isEmpty())
-        assertNull(collection.lastKnownPrinting(printing.identifier))
+        assertNull(collection.customPrinting(printing.identifier))
     }
 
     @Test

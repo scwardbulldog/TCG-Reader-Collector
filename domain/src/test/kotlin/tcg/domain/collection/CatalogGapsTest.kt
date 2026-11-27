@@ -14,20 +14,16 @@ import tcg.domain.catalog.catalogJson
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /** Catalog refreshes that drop or restore a Printing the Collection refers to. */
 class CatalogGapsTest {
     private val source = FakeCatalogSource()
-    private val catalog = InMemoryCatalogStore()
     private val collection = InMemoryCollectionStore()
+    private val catalog = InMemoryCatalogStore(collection)
     private val list = CollectionList(collection, catalog)
-    private val updater = CatalogUpdater(
-        source,
-        catalog,
-        listOf(CatalogTarget(Game.OnePiece, Language.English)),
-        beforeReplace = LastKnownPrintings(collection, catalog)::remember,
-    )
+    private val updater = CatalogUpdater(source, catalog, listOf(CatalogTarget(Game.OnePiece, Language.English)))
 
     private val zoro = PrintingIdentifier(Game.OnePiece, Language.English, "OP01-001_p1")
     private val nami = PrintingIdentifier(Game.OnePiece, Language.English, "OP01-016")
@@ -128,6 +124,72 @@ class CatalogGapsTest {
 
         assertTrue(list.rows().single { it.printing == zoro }.noLongerInCatalog)
         assertFalse(list.rows().single { it.printing == nami }.noLongerInCatalog)
+    }
+
+    @Test
+    fun `a dropped Printing no Owned Copy uses is deleted`() = runTest {
+        refresh("v1", "OP01-001_p1" to "Roronoa Zoro", "OP01-016" to "Nami")
+        collection.add(NewOwnedCopy(nami))
+
+        refresh("v2", "OP01-016" to "Nami")
+
+        assertNull(catalog.find(zoro))
+        assertEquals("Nami", catalog.find(nami)?.name)
+    }
+
+    @Test
+    fun `a returning Printing takes the new details and clears the flag`() = runTest {
+        ownThenDrop()
+        assertTrue(catalog.find(zoro)!!.noLongerInCatalog)
+
+        refresh("v3", "OP01-001_p1" to "Zoro (renamed)", "OP01-016" to "Nami")
+
+        val returned = catalog.find(zoro)!!
+        assertEquals("Zoro (renamed)", returned.name)
+        assertFalse(returned.noLongerInCatalog)
+        assertEquals(2, collection.ownedCopies(zoro).size)
+    }
+
+    @Test
+    fun `an unchanged ID keeps its Owned Copies and takes the new details`() = runTest {
+        ownThenDrop()
+        refresh("v3", "OP01-016" to "Nami (renamed)")
+
+        assertEquals("Nami (renamed)", list.rows().single { it.printing == nami }.name)
+        assertEquals(1, collection.ownedCopies(nami).size)
+    }
+
+    @Test
+    fun `a re-ID'd card leaves the old copy on the old flagged Printing and adds the new Printing separately`() = runTest {
+        val reIdd = PrintingIdentifier(Game.OnePiece, Language.English, "OP01-001_p2")
+        ownThenDrop()
+
+        refresh("v3", "OP01-001_p2" to "Roronoa Zoro", "OP01-016" to "Nami")
+
+        assertTrue(catalog.find(zoro)!!.noLongerInCatalog)
+        assertFalse(catalog.find(reIdd)!!.noLongerInCatalog)
+        assertEquals(2, collection.ownedCopies(zoro).size)
+        assertEquals(emptyList(), collection.ownedCopies(reIdd))
+    }
+
+    @Test
+    fun `a flagged Printing is not offered for a scan or search`() = runTest {
+        ownThenDrop()
+
+        assertEquals(emptyList(), catalog.findByBaseNumber(Game.OnePiece, Language.English, "OP01-001"))
+        assertEquals(emptyList(), catalog.search(Game.OnePiece, Language.English, "zoro"))
+    }
+
+    @Test
+    fun `a refresh never touches a Custom Printing`() = runTest {
+        val custom = CustomPrintings(collection).create(Game.OnePiece, Language.English, "OP01-001", "Milk Box Stamp")
+        collection.add(NewOwnedCopy(custom.identifier))
+
+        refresh("v1", "OP01-016" to "Nami")
+        refresh("v2", "OP01-017" to "Law")
+
+        assertEquals(listOf(custom), collection.customPrintings(Game.OnePiece, Language.English))
+        assertFalse(list.rows().single { it.printing == custom.identifier }.noLongerInCatalog)
     }
 
     @Test

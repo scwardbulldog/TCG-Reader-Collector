@@ -13,8 +13,8 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 
 class CollectionExportTest {
-    private val catalog = InMemoryCatalogStore()
     private val collection = InMemoryCollectionStore()
+    private val catalog = InMemoryCatalogStore(collection)
 
     private val zoro = PrintingIdentifier(Game.OnePiece, Language.English, "OP01-001")
     private val nami = PrintingIdentifier(Game.OnePiece, Language.English, "OP01-016")
@@ -25,13 +25,16 @@ class CollectionExportTest {
 
     @Test
     fun `exports every Owned Copy with Location names, last-known details and blanks for Unresolved Printings`() = runTest {
-        catalog.replaceCatalog(Game.OnePiece, Language.English, listOf(printing(zoro, "OP01-001", "Roronoa Zoro")))
-        collection.rememberPrintings(listOf(printing(nami, "OP01-016", "Nami")))
+        catalog.replaceCatalog(
+            Game.OnePiece, Language.English,
+            listOf(printing(zoro, "OP01-001", "Roronoa Zoro"), printing(nami, "OP01-016", "Nami")),
+        )
         val binder = collection.createLocation("Binder A")
         collection.add(NewOwnedCopy(zoro, Condition.NearMint, binder.id, "first"))
         collection.add(NewOwnedCopy(zoro, Condition.Damaged, null, "second"))
         collection.add(NewOwnedCopy(nami))
         collection.add(NewOwnedCopy(unknown))
+        catalog.replaceCatalog(Game.OnePiece, Language.English, listOf(printing(zoro, "OP01-001", "Roronoa Zoro")))
 
         val rows = CollectionExport(collection, catalog).csv().lines().filter { it.isNotEmpty() }.drop(1)
 

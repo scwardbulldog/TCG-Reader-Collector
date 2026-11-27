@@ -17,7 +17,7 @@ import tcg.domain.isCustom
 class InMemoryCollectionStore : CollectionStore {
     private val copies = mutableListOf<OwnedCopy>()
     private val locations = mutableListOf<Location>()
-    private val lastKnown = mutableMapOf<PrintingIdentifier, Printing>()
+    private val custom = mutableMapOf<PrintingIdentifier, Printing>()
     private var nextId = 1L
 
     override suspend fun add(copy: NewOwnedCopy): OwnedCopy =
@@ -40,17 +40,18 @@ class InMemoryCollectionStore : CollectionStore {
     override suspend fun countsByPrinting(): Map<PrintingIdentifier, Int> =
         copies.groupingBy { it.printing }.eachCount()
 
-    override suspend fun rememberPrintings(printings: List<Printing>) {
-        printings.forEach { lastKnown[it.identifier] = it }
+    override suspend fun saveCustomPrinting(printing: Printing) {
+        require(printing.identifier.isCustom) { "Only a Custom Printing can be saved here" }
+        custom[printing.identifier] = printing
     }
 
-    override suspend fun lastKnownPrinting(identifier: PrintingIdentifier): Printing? = lastKnown[identifier]
+    override suspend fun customPrinting(identifier: PrintingIdentifier): Printing? = custom[identifier]
 
     override suspend fun customPrintings(game: Game, language: Language): List<Printing> =
-        lastKnown.values.filter { it.identifier.isCustom && it.identifier.game == game && it.identifier.language == language }
+        custom.values.filter { it.identifier.game == game && it.identifier.language == language }
 
     override suspend fun deleteCustomPrinting(identifier: PrintingIdentifier) {
-        if (identifier.isCustom) lastKnown.remove(identifier)
+        custom.remove(identifier)
     }
 
     override suspend fun createLocation(name: String): Location =
@@ -70,15 +71,15 @@ class InMemoryCollectionStore : CollectionStore {
     }
 
     override suspend fun snapshot(): CollectionSnapshot =
-        CollectionSnapshot(locations.toList(), copies.toList(), lastKnown.values.filter { it.identifier.isCustom })
+        CollectionSnapshot(locations.toList(), copies.toList(), custom.values.toList())
 
     override suspend fun replaceCollection(snapshot: CollectionSnapshot) {
         copies.clear()
         copies.addAll(snapshot.copies)
         locations.clear()
         locations.addAll(snapshot.locations)
-        lastKnown.clear()
-        snapshot.customPrintings.forEach { lastKnown[it.identifier] = it }
+        custom.clear()
+        snapshot.customPrintings.forEach { custom[it.identifier] = it }
         nextId = maxOf(nextId, (snapshot.copies.map { it.id.value } + snapshot.locations.map { it.id.value }).maxOrNull()?.plus(1) ?: 1)
     }
 }
