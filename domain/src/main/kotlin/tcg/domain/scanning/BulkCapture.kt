@@ -74,10 +74,11 @@ class BulkCapture(
     suspend fun addAll(): List<OwnedCopy> = fix { batch.addAll() }
 
     private suspend fun <T> fix(change: suspend () -> T): T = lock.withLock {
+        val before = batch.rows.sumOf { it.count }
         try {
             change()
         } finally {
-            publish()
+            publish(leftBatch = before - batch.rows.sumOf { it.count })
         }
     }
 
@@ -101,10 +102,13 @@ class BulkCapture(
         }
     }
 
-    private fun publish(readOne: Boolean = false) {
+    /** [leftBatch] is how many cards were just removed or added, so the counts only describe what is still in the batch. */
+    private fun publish(readOne: Boolean = false, leftBatch: Int = 0) {
         val rows = batch.rows
         reviewRows.value = rows
-        state.update { BulkStatus(it.snapped, it.read + if (readOne) 1 else 0, rows.count { row -> row !is BatchRow.Resolved }) }
+        state.update {
+            BulkStatus(it.snapped - leftBatch, it.read - leftBatch + if (readOne) 1 else 0, rows.count { row -> row !is BatchRow.Resolved })
+        }
     }
 
     private fun release(photo: PhotoId) {

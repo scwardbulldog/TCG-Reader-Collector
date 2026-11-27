@@ -155,7 +155,7 @@ class BulkCaptureTest {
         capture.pick(ambiguous.id, ambiguous.candidates.last())
 
         assertEquals(listOf("OP03-001", "OP02-001_p1"), capture.rows.value.map { (it as BatchRow.Resolved).printing.identifier.sourceId })
-        assertEquals(BulkStatus(snapped = 3, read = 3, needsAttention = 0), capture.status.value)
+        assertEquals(BulkStatus(snapped = 2, read = 2, needsAttention = 0), capture.status.value)
     }
 
     @Test
@@ -178,7 +178,28 @@ class BulkCaptureTest {
         assertEquals(2, added.size)
         assertEquals(2, collection.ownedCopies(zoro.identifier).size)
         assertEquals(listOf("Failed", "ambiguous"), capture.rows.value.map(::rowKind))
-        assertEquals(BulkStatus(snapped = 4, read = 4, needsAttention = 2), capture.status.value)
+        assertEquals(BulkStatus(snapped = 2, read = 2, needsAttention = 2), capture.status.value)
+    }
+
+    @Test
+    fun `cards already added leave the counts, but a photo still being read stays in them`() = runTest {
+        val gate = CompletableDeferred<Unit>()
+        val batch = batch(printing("OP01-001"))
+        val source = ScriptedSource { "OP01-001" }
+        source.gates[PhotoId(3)] = gate
+        val capture = BulkCapture(batch, source, backgroundScope)
+        capture.snap(PhotoId(1))
+        capture.snap(PhotoId(2))
+        runCurrent()
+
+        capture.snap(PhotoId(3))
+        runCurrent()
+        capture.addAll()
+
+        assertEquals(BulkStatus(snapped = 1, read = 0, needsAttention = 0), capture.status.value)
+        gate.complete(Unit)
+        runCurrent()
+        assertEquals(BulkStatus(snapped = 1, read = 1, needsAttention = 0), capture.status.value)
     }
 
     @Test
