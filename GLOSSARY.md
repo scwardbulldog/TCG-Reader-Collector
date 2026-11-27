@@ -32,7 +32,7 @@ The stable reference to a **Printing**: its **Game**, **Language**, and the sour
 _Avoid_: Card ID, SKU
 
 **Unresolved Printing**:
-A **Printing** that an **Owned Copy** refers to by **Printing identifier** only, because the **Catalog** has no record of it (e.g. after a restore).
+A **Printing** that an **Owned Copy** refers to by **Printing identifier** only, because the **Catalog** has no record of it and nothing else does (now only after restoring an older backup that lacks last-known details).
 _Avoid_: Orphan, missing card
 
 **Custom Printing**:
@@ -44,7 +44,7 @@ The collector's own picture of a physical card, kept on a **Custom Printing** so
 _Avoid_: Scan, snapshot, custom image (a Bulk Add snap is a transient photo that is read and discarded, never kept)
 
 **No longer in the Catalog**:
-The flag on a **Printing** whose **Owned Copies** remain after a **Catalog** refresh dropped it. Its last-known details are kept and shown; unlike an **Unresolved Printing**, the app once had its details.
+The flag on a **Printing** whose **Owned Copies** remain after a **Catalog** refresh dropped it, or after a restore whose backup carried its details while the **Catalog** lacks it. Its last-known details are kept and shown; unlike an **Unresolved Printing**, the app once had its details.
 _Avoid_: Deleted, removed, orphan
 
 **Base Number**:

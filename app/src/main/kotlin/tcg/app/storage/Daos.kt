@@ -88,6 +88,12 @@ interface CollectionDao {
     @Query("SELECT * FROM printing WHERE origin = 'Custom'")
     suspend fun allCustomPrintings(): List<PrintingEntity>
 
+    @Query(
+        "SELECT * FROM printing WHERE origin = 'Catalog' AND noLongerInCatalog = 1 AND EXISTS " +
+            "(SELECT 1 FROM owned_copy c WHERE c.game = printing.game AND c.language = printing.language AND c.sourceId = printing.sourceId)",
+    )
+    suspend fun flaggedCatalogPrintings(): List<PrintingEntity>
+
     @Query("DELETE FROM printing WHERE game = :game AND language = :language AND sourceId = :sourceId AND origin = 'Custom'")
     suspend fun deleteCustomPrinting(game: Game, language: Language, sourceId: String)
 
@@ -128,22 +134,39 @@ interface CollectionDao {
     @Query("DELETE FROM printing WHERE origin = 'Custom'")
     suspend fun deleteAllCustomPrintings()
 
-    /** One transaction, so the Locations, Owned Copies and Custom Printings are read as of the same moment. */
+    /** Keeps a Catalog row the app already has: the Catalog's details win over a backup's last-known ones. */
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insertLastKnownPrintings(printings: List<PrintingEntity>)
+
+    /** One transaction, so the Locations, Owned Copies and Printings are read as of the same moment. */
     @Transaction
-    suspend fun snapshot(): Triple<List<LocationEntity>, List<OwnedCopyEntity>, List<PrintingEntity>> =
-        Triple(locations(), allCopies(), allCustomPrintings())
+    suspend fun snapshot(): CollectionRows =
+        CollectionRows(locations(), allCopies(), allCustomPrintings(), flaggedCatalogPrintings())
 
     /** One transaction: a failed insert rolls back the deletes too, leaving the old Collection in place. */
     @Transaction
-    suspend fun replaceAll(locations: List<LocationEntity>, copies: List<OwnedCopyEntity>, customPrintings: List<PrintingEntity>) {
+    suspend fun replaceAll(
+        locations: List<LocationEntity>,
+        copies: List<OwnedCopyEntity>,
+        customPrintings: List<PrintingEntity>,
+        lastKnownPrintings: List<PrintingEntity>,
+    ) {
         deleteAllCopies()
         deleteAllLocations()
         deleteAllCustomPrintings()
         insertLocations(locations)
         insertAll(copies)
         upsertCustomPrintings(customPrintings)
+        insertLastKnownPrintings(lastKnownPrintings)
     }
 }
+
+class CollectionRows(
+    val locations: List<LocationEntity>,
+    val copies: List<OwnedCopyEntity>,
+    val customPrintings: List<PrintingEntity>,
+    val lastKnownPrintings: List<PrintingEntity>,
+)
 
 @Dao
 interface BackupStatusDao {

@@ -18,6 +18,7 @@ class InMemoryCollectionStore : CollectionStore {
     private val copies = mutableListOf<OwnedCopy>()
     private val locations = mutableListOf<Location>()
     private val custom = mutableMapOf<PrintingIdentifier, Printing>()
+    private val lastKnown = mutableMapOf<PrintingIdentifier, Printing>()
     private var nextId = 1L
 
     override suspend fun add(copy: NewOwnedCopy): OwnedCopy =
@@ -71,7 +72,7 @@ class InMemoryCollectionStore : CollectionStore {
     }
 
     override suspend fun snapshot(): CollectionSnapshot =
-        CollectionSnapshot(locations.toList(), copies.toList(), custom.values.toList())
+        CollectionSnapshot(locations.toList(), copies.toList(), custom.values.toList(), lastKnown.values.toList())
 
     override suspend fun replaceCollection(snapshot: CollectionSnapshot) {
         copies.clear()
@@ -80,6 +81,8 @@ class InMemoryCollectionStore : CollectionStore {
         locations.addAll(snapshot.locations)
         custom.clear()
         snapshot.customPrintings.forEach { custom[it.identifier] = it }
+        lastKnown.clear()
+        snapshot.lastKnownPrintings.forEach { lastKnown[it.identifier] = it }
         nextId = maxOf(nextId, (snapshot.copies.map { it.id.value } + snapshot.locations.map { it.id.value }).maxOrNull()?.plus(1) ?: 1)
     }
 }

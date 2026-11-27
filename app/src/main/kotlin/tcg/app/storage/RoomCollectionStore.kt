@@ -83,11 +83,12 @@ class RoomCollectionStore(private val dao: CollectionDao) : CollectionStore {
         if (dao.deleteLocationIfEmpty(id.value)) DeleteLocationResult.Deleted else DeleteLocationResult.NotEmpty
 
     override suspend fun snapshot(): CollectionSnapshot {
-        val (locations, copies, custom) = dao.snapshot()
+        val rows = dao.snapshot()
         return CollectionSnapshot(
-            locations.map { Location(LocationId(it.id), it.name) },
-            copies.map { it.toDomain() },
-            custom.map { it.toDomain() },
+            rows.locations.map { Location(LocationId(it.id), it.name) },
+            rows.copies.map { it.toDomain() },
+            rows.customPrintings.map { it.toDomain() },
+            rows.lastKnownPrintings.map { it.toDomain() },
         )
     }
 
@@ -105,6 +106,9 @@ class RoomCollectionStore(private val dao: CollectionDao) : CollectionStore {
             )
         },
         snapshot.customPrintings.map { it.toEntity() },
+        snapshot.lastKnownPrintings
+            .filter { printing -> snapshot.copies.any { it.printing == printing.identifier } }
+            .map { it.copy(noLongerInCatalog = true).toEntity() },
     )
 }
 

@@ -8,12 +8,15 @@ import tcg.domain.Location
 import tcg.domain.LocationId
 import tcg.domain.OwnedCopy
 import tcg.domain.OwnedCopyId
+import tcg.domain.Printing
 import tcg.domain.PrintingIdentifier
+import tcg.domain.Variant
 import java.time.Instant
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
+import kotlin.test.assertNotEquals
 
 class BackupFormatTest {
     private val zoro = PrintingIdentifier(Game.OnePiece, Language.English, "OP01-001_p1")
@@ -51,7 +54,61 @@ class BackupFormatTest {
     fun `a backup holds no Catalog details`() {
         val json = serialized()
 
-        listOf("baseNumber", "releaseProduct", "rarity", "imageUrl").forEach { assertFalse(json.contains(it), it) }
+        listOf("baseNumber", "releaseProduct", "rarity", "imageUrl", "lastKnownPrintings").forEach { assertFalse(json.contains(it), it) }
+    }
+
+    private val retired = Printing(
+        identifier = zoro,
+        baseNumber = "OP01-001",
+        releaseProduct = "Romance Dawn",
+        rarity = "L",
+        name = "Roronoa Zoro",
+        imageUrl = "https://example.invalid/OP01-001_p1.png",
+        variant = Variant.AlternateArt,
+        productCode = "OP-01",
+        treatments = listOf("Manga", "Wanted Poster"),
+        noLongerInCatalog = true,
+    )
+
+    @Test
+    fun `last-known details of a flagged Printing round-trip, including unknown and empty fields`() {
+        val bare = retired.copy(identifier = nami, variant = null, productCode = null, treatments = null)
+        val plain = retired.copy(identifier = nami.copy(sourceId = "OP01-017"), variant = Variant.Normal, treatments = emptyList())
+        val withFlagged = snapshot.copy(lastKnownPrintings = listOf(retired, bare, plain))
+
+        val parsed = BackupFormat.parse(BackupFormat.serialize(withFlagged, createdAt)).snapshot
+
+        assertEquals(withFlagged.lastKnownPrintings.toSet(), parsed.lastKnownPrintings.toSet())
+    }
+
+    @Test
+    fun `a version 1 backup without last-known details still parses`() {
+        val old = """{"format":"tcg-collection-backup","schemaVersion":1,"createdAt":"2026-11-26T18:00:00Z","locations":[],""" +
+            """"ownedCopies":[{"id":1,"game":"onepiece","language":"en","sourceId":"OP01-001_p1","condition":"near_mint","locationId":null,"notes":""}]}"""
+
+        val parsed = BackupFormat.parse(old).snapshot
+
+        assertEquals(emptyList(), parsed.lastKnownPrintings)
+        assertEquals(zoro, parsed.copies.single().printing)
+    }
+
+    @Test
+    fun `a flagged Printing changes the fingerprint`() {
+        assertNotEquals(BackupFormat.fingerprint(snapshot), BackupFormat.fingerprint(snapshot.copy(lastKnownPrintings = listOf(retired))))
+    }
+
+    @Test
+    fun `an invalid last-known Printing is rejected`() {
+        val withFlagged = BackupFormat.serialize(snapshot.copy(lastKnownPrintings = listOf(retired)), createdAt)
+
+        val custom = snapshot.copy(lastKnownPrintings = listOf(retired.copy(identifier = zoro.copy(sourceId = "custom:1"))))
+        listOf(
+            withFlagged.replace("\"OP01-001\"", "\" \""),
+            withFlagged.replace("\"alternate-art\"", "\"holo\""),
+            BackupFormat.serialize(custom, createdAt),
+        ).forEach { assertFailsWith<BackupFormatException> { BackupFormat.parse(it) } }
+        val duplicate = snapshot.copy(lastKnownPrintings = listOf(retired, retired))
+        assertFailsWith<BackupFormatException> { BackupFormat.parse(BackupFormat.serialize(duplicate, createdAt)) }
     }
 
     @Test

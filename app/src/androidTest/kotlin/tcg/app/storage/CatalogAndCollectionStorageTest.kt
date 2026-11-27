@@ -293,6 +293,62 @@ class CatalogAndCollectionStorageTest {
     }
 
     @Test
+    fun a_flagged_printing_is_in_the_snapshot_and_a_restore_brings_it_back_flagged_only_where_the_catalog_lacks_it() = runTest {
+        val zoro = PrintingIdentifier(Game.OnePiece, Language.English, "OP01-001_p1")
+        val nami = PrintingIdentifier(Game.OnePiece, Language.English, "OP01-016")
+        catalog.replaceCatalog(Game.OnePiece, Language.English, listOf(printing(zoro), printing(nami)))
+        collection.add(NewOwnedCopy(zoro))
+        collection.add(NewOwnedCopy(nami))
+        catalog.replaceCatalog(Game.OnePiece, Language.English, emptyList())
+        val backup = collection.snapshot()
+        val lastKnown = printing(zoro).copy(noLongerInCatalog = true)
+        assertEquals(setOf(lastKnown, printing(nami).copy(noLongerInCatalog = true)), backup.lastKnownPrintings.toSet())
+
+        // Fresh install, Catalog lacks both: both come back flagged with their last-known name.
+        val fresh = AppDatabase.inMemory(ApplicationProvider.getApplicationContext())
+        fresh.collectionStore().replaceCollection(backup)
+        assertEquals(lastKnown, fresh.catalogStore().find(zoro))
+        fresh.close()
+
+        // The Catalog has Zoro (with newer details): its details win and it is not flagged; Nami is flagged.
+        val withZoro = AppDatabase.inMemory(ApplicationProvider.getApplicationContext())
+        val listed = printing(zoro).copy(name = "Zoro (current)")
+        withZoro.catalogStore().replaceCatalog(Game.OnePiece, Language.English, listOf(listed))
+        withZoro.collectionStore().replaceCollection(backup)
+        assertEquals(listed, withZoro.catalogStore().find(zoro))
+        assertEquals(true, withZoro.catalogStore().find(nami)?.noLongerInCatalog)
+        withZoro.close()
+    }
+
+    @Test
+    fun a_restored_flagged_printing_takes_the_catalogs_details_when_a_later_refresh_lists_it() = runTest {
+        val zoro = PrintingIdentifier(Game.OnePiece, Language.English, "OP01-001_p1")
+        collection.replaceCollection(
+            CollectionSnapshot(emptyList(), listOf(OwnedCopy(OwnedCopyId(1), zoro, Condition.NearMint, null, "")), lastKnownPrintings = listOf(printing(zoro))),
+        )
+        assertEquals(true, catalog.find(zoro)?.noLongerInCatalog)
+
+        catalog.replaceCatalog(Game.OnePiece, Language.English, listOf(printing(zoro).copy(name = "Zoro (current)")))
+
+        assertEquals(printing(zoro).copy(name = "Zoro (current)"), catalog.find(zoro))
+    }
+
+    @Test
+    fun a_flagged_printing_no_owned_copy_uses_any_more_is_not_carried_by_the_snapshot_or_a_restore() = runTest {
+        val zoro = PrintingIdentifier(Game.OnePiece, Language.English, "OP01-001_p1")
+        catalog.replaceCatalog(Game.OnePiece, Language.English, listOf(printing(zoro)))
+        val copy = collection.add(NewOwnedCopy(zoro))
+        catalog.replaceCatalog(Game.OnePiece, Language.English, emptyList())
+        collection.delete(copy.id)
+
+        assertEquals(emptyList(), collection.snapshot().lastKnownPrintings)
+
+        val stray = PrintingIdentifier(Game.OnePiece, Language.English, "OP01-099")
+        db.collectionStore().replaceCollection(CollectionSnapshot(emptyList(), emptyList(), lastKnownPrintings = listOf(printing(stray))))
+        assertNull(catalog.find(stray))
+    }
+
+    @Test
     fun a_replace_that_fails_part_way_leaves_the_old_collection_intact() = runTest {
         val zoro = PrintingIdentifier(Game.OnePiece, Language.English, "OP01-001_p1")
         val custom = PrintingIdentifier(Game.OnePiece, Language.English, "custom:1")

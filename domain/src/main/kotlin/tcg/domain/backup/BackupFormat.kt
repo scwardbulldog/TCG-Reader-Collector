@@ -17,6 +17,7 @@ import tcg.domain.OwnedCopy
 import tcg.domain.OwnedCopyId
 import tcg.domain.Printing
 import tcg.domain.PrintingIdentifier
+import tcg.domain.Variant
 import tcg.domain.isCustom
 import tcg.domain.collection.CustomPrintings
 import java.security.MessageDigest
@@ -28,7 +29,8 @@ class BackupFormatException(message: String, cause: Throwable? = null) : Excepti
 class ParsedBackup(val snapshot: CollectionSnapshot, val createdAt: Instant)
 
 /**
- * The versioned JSON backup file. It holds Owned Copies, Locations and Custom Printings only: never Catalog details or images.
+ * The versioned JSON backup file. It holds Owned Copies, Locations and Custom Printings, plus last-known details only for
+ * Printings flagged No longer in the Catalog (an optional field, so version 1 files still parse): never other Catalog details or images.
  * [parse] checks the whole file and either returns all of it or throws [BackupFormatException].
  */
 object BackupFormat {
@@ -45,6 +47,22 @@ object BackupFormat {
         val locations: List<LocationEntry>,
         val ownedCopies: List<CopyEntry>,
         val customPrintings: List<CustomPrintingEntry> = emptyList(),
+        val lastKnownPrintings: List<LastKnownPrintingEntry> = emptyList(),
+    )
+
+    @Serializable
+    private class LastKnownPrintingEntry(
+        val game: String,
+        val language: String,
+        val sourceId: String,
+        val baseNumber: String,
+        val releaseProduct: String,
+        val rarity: String,
+        val name: String,
+        val imageUrl: String,
+        val variant: String? = null,
+        val productCode: String? = null,
+        val treatments: List<String>? = null,
     )
 
     @Serializable
@@ -129,6 +147,23 @@ object BackupFormat {
                 label = it.name,
             )
         },
+        lastKnownPrintings = snapshot.lastKnownPrintings
+            .sortedWith(compareBy({ it.identifier.game.code() }, { it.identifier.language.code() }, { it.identifier.sourceId }))
+            .map {
+                LastKnownPrintingEntry(
+                    game = it.identifier.game.code(),
+                    language = it.identifier.language.code(),
+                    sourceId = it.identifier.sourceId,
+                    baseNumber = it.baseNumber,
+                    releaseProduct = it.releaseProduct,
+                    rarity = it.rarity,
+                    name = it.name,
+                    imageUrl = it.imageUrl,
+                    variant = it.variant?.code(),
+                    productCode = it.productCode,
+                    treatments = it.treatments,
+                )
+            },
     )
 
     private fun snapshot(file: File): CollectionSnapshot {
@@ -172,7 +207,29 @@ object BackupFormat {
         if (customPrintings.map { it.identifier }.toSet().size != customPrintings.size) {
             throw BackupFormatException("The backup has duplicate Custom Printings")
         }
-        return CollectionSnapshot(file.locations.map { Location(LocationId(it.id), it.name) }, copies, customPrintings)
+        val lastKnown = file.lastKnownPrintings.map { entry ->
+            val identifier = PrintingIdentifier(game(entry.game), language(entry.language), entry.sourceId)
+            if (entry.sourceId.isBlank() || identifier.isCustom) {
+                throw BackupFormatException("The backup has a last-known Printing with an invalid identifier")
+            }
+            if (entry.baseNumber.isBlank()) throw BackupFormatException("The backup has a last-known Printing with no Base Number")
+            Printing(
+                identifier = identifier,
+                baseNumber = entry.baseNumber,
+                releaseProduct = entry.releaseProduct,
+                rarity = entry.rarity,
+                name = entry.name,
+                imageUrl = entry.imageUrl,
+                variant = entry.variant?.let(::variant),
+                productCode = entry.productCode,
+                treatments = entry.treatments,
+                noLongerInCatalog = true,
+            )
+        }
+        if (lastKnown.map { it.identifier }.toSet().size != lastKnown.size) {
+            throw BackupFormatException("The backup has duplicate last-known Printings")
+        }
+        return CollectionSnapshot(file.locations.map { Location(LocationId(it.id), it.name) }, copies, customPrintings, lastKnown)
     }
 
     private fun createdAt(text: String): Instant = try {
@@ -195,6 +252,15 @@ object BackupFormat {
 
     private fun language(code: String) = Language.entries.firstOrNull { it.code() == code }
         ?: throw BackupFormatException("The backup has an unknown Language \"$code\"")
+
+    private fun Variant.code() = when (this) {
+        Variant.Normal -> "normal"
+        Variant.AlternateArt -> "alternate-art"
+        Variant.Reprint -> "reprint"
+    }
+
+    private fun variant(code: String) = Variant.entries.firstOrNull { it.code() == code }
+        ?: throw BackupFormatException("The backup has an unknown variant \"$code\"")
 
     private fun Condition.code() = when (this) {
         Condition.NearMint -> "near_mint"
