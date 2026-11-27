@@ -27,7 +27,8 @@ Each entry maps onto the domain `Printing` ([Printing.kt](../domain/src/main/kot
 
 - `id` is Bandai's ID and is opaque. It is the Printing's identity and is unique within a file. A card Bandai lists in several packs is one Printing.
 - `baseNumber` is `id` without a Variant suffix (`_pN` Alternate Art, `_rN` Reprint).
-- `releaseProduct` is the pack title the Printing was listed in. When listed in several packs, the lowest pack ID wins.
+- `releaseProduct` is the pack title the Printing was listed in. For Printings in the four generic promo packs (EN `Promotion card`, `Other Product Card`; JP `プロモーションカード`, `限定商品収録カード`) it is instead Bandai's "Information Obtained" (入手情報) text, such as `Event Pack Vol.5`, because the pack title says nothing about the real product. If that text is blank or missing, the generic pack title is used.
+- When Bandai lists the same ID in several packs, it is still one Printing and the lowest pack ID wins. Bandai's IDs are not always unique per physical card: EN `OP07-091_p1` is listed as both "Offline Regional Finalist Card Set 2024 Vol. 3" and "Offline Regional Participation Pack 2024 Vol. 3" with the same image, and the Catalog keeps only the one from the lower pack ID. This is a known limitation.
 - `printings` is sorted by `id`, so unchanged data gives a byte-identical file.
 - `language` is `en` or `jp`, mapping to the domain `Language` values English and Japanese. `game` is `onepiece`, mapping to `Game.OnePiece`.
 
@@ -35,4 +36,4 @@ A refresh replaces the Catalog only. It never touches Owned Copies (see [ADR 000
 
 ## Publish gate
 
-The pipeline refuses to publish (leaving the previous file untouched) when the new Catalog is empty, when the previous file is unreadable, or when it has more than 10% fewer Printings than the published file.
+The pipeline refuses to publish (leaving the previous file untouched) when the new Catalog is empty, when the previous file is unreadable, or when it has more than 10% fewer Printings than the published file. It also refuses when more than half of the promo Printings lack "Information Obtained", which means Bandai's markup changed.
