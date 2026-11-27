@@ -5,6 +5,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import tcg.domain.CatalogStore
 import tcg.domain.CollectionStore
+import tcg.domain.Game
 import tcg.domain.Location
 import tcg.domain.LocationId
 import tcg.domain.OwnedCopy
@@ -44,6 +45,7 @@ class PrintingDetail(
     private val mutableState = MutableStateFlow(PrintingDetailState())
     private val printings = PrintingResolver(collection, catalog)
     private val customPrintings = CustomPrintings(collection)
+    private val cards = Cards(catalog, collection)
     val state: StateFlow<PrintingDetailState> = mutableState.asStateFlow()
     private var shown: Set<OwnedCopyId> = emptySet()
 
@@ -81,6 +83,32 @@ class PrintingDetail(
         mutableState.value = mutableState.value.copy(pendingDelete = null)
         reloadCopies()
     }
+
+    /**
+     * Moves the one Owned Copy [id] to [target], whatever its origin; the copy keeps its condition, Location and
+     * notes and no other copy changes. The state is not reloaded: the caller opens the target's detail.
+     */
+    suspend fun move(id: OwnedCopyId, target: PrintingIdentifier) {
+        collection.move(id, target)
+    }
+
+    /** Creates a Custom Printing in this Printing's Game and Language and moves the Owned Copy [id] to it. */
+    suspend fun moveToNewCustom(id: OwnedCopyId, baseNumber: String, label: String): PrintingIdentifier {
+        val created = customPrintings.create(printing.game, printing.language, baseNumber, label)
+        collection.move(id, created.identifier)
+        return created.identifier
+    }
+
+    /** The Card of this Printing, which the picker starts from; null for an Unresolved Printing or one with no Base Number. */
+    suspend fun ownCard(): CardViewState? {
+        val baseNumber = printings.resolve(printing)?.baseNumber?.takeIf { it.isNotBlank() } ?: return null
+        return cardView(printing.game, baseNumber)
+    }
+
+    suspend fun cardView(game: Game, baseNumber: String): CardViewState? = CardView(catalog, collection).of(game, baseNumber)
+
+    /** The Cards of this Printing's Game whose Base Number or name contains [query], in either Language. */
+    suspend fun searchCards(query: String): List<Card> = cards.search(printing.game, query)
 
     /** Renames a Custom Printing; the new label shows on every Owned Copy of it. */
     suspend fun rename(label: String) {

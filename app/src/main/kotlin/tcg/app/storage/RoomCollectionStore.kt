@@ -39,17 +39,11 @@ class RoomCollectionStore(private val dao: CollectionDao) : CollectionStore {
     override suspend fun ownedCopies(printing: PrintingIdentifier): List<OwnedCopy> =
         dao.ownedCopies(printing.game, printing.language, printing.sourceId).map { it.toDomain() }
 
-    override suspend fun update(copy: OwnedCopy) = dao.update(
-        OwnedCopyEntity(
-            id = copy.id.value,
-            game = copy.printing.game,
-            language = copy.printing.language,
-            sourceId = copy.printing.sourceId,
-            condition = copy.condition,
-            locationId = copy.location?.value,
-            notes = copy.notes,
-        ),
-    )
+    override suspend fun update(copy: OwnedCopy) =
+        dao.update(copy.id.value, copy.condition, copy.location?.value, copy.notes)
+
+    override suspend fun move(id: OwnedCopyId, printing: PrintingIdentifier) =
+        dao.move(id.value, printing.game, printing.language, printing.sourceId)
 
     override suspend fun delete(id: OwnedCopyId) = dao.delete(id.value)
 

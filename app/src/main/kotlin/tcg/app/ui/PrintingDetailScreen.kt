@@ -44,6 +44,7 @@ import tcg.domain.Game
 import tcg.domain.Location
 import tcg.domain.LocationId
 import tcg.domain.OwnedCopy
+import tcg.domain.OwnedCopyId
 import tcg.domain.PrintingIdentifier
 import tcg.domain.collection.productText
 import tcg.domain.collection.treatmentText
@@ -56,12 +57,14 @@ fun PrintingDetailScreen(
     printing: PrintingIdentifier,
     locationFilter: LocationId?,
     onOpenCard: (Game, String) -> Unit,
+    onMoved: (PrintingIdentifier) -> Unit,
     onBack: () -> Unit,
 ) {
     LaunchedEffect(printing) { viewModel.show(printing, locationFilter) }
     val state = viewModel.state
     val entry = state.details
     var renaming by remember { mutableStateOf(false) }
+    var changing by remember { mutableStateOf<OwnedCopyId?>(null) }
     // Deleting the last Owned Copy leaves nothing to show. Reads the view model afresh because
     // the previous visit's state can still be in the first frame.
     LaunchedEffect(state.loaded, state.copies.isEmpty()) {
@@ -121,6 +124,7 @@ fun PrintingDetailScreen(
                         locations = state.locations,
                         onSave = viewModel::save,
                         onDelete = { viewModel.requestDelete(copy.id) },
+                        onChangePrinting = { changing = copy.id },
                         onCreateLocation = viewModel::createLocation,
                     )
                 }
@@ -139,6 +143,21 @@ fun PrintingDetailScreen(
                 renaming = false
                 viewModel.rename(label)
             },
+        )
+    }
+    changing?.let { copyId ->
+        ChangePrintingDialog(
+            viewModel,
+            current = printing,
+            onMove = { target ->
+                changing = null
+                viewModel.move(copyId, target, onMoved)
+            },
+            onCreateCustom = { number, label ->
+                changing = null
+                viewModel.moveToNewCustom(copyId, number, label, onMoved)
+            },
+            onDismiss = { changing = null },
         )
     }
     if (state.pendingDelete != null) DeleteConfirmation(viewModel, offerCustomDelete = printing.isCustom && state.totalCopies == 1)
@@ -174,6 +193,7 @@ private fun OwnedCopyEditor(
     locations: List<Location>,
     onSave: (OwnedCopy) -> Unit,
     onDelete: () -> Unit,
+    onChangePrinting: () -> Unit,
     onCreateLocation: (String, (LocationId) -> Unit) -> Unit,
 ) {
     val latest by rememberUpdatedState(copy)
@@ -225,7 +245,10 @@ private fun OwnedCopyEditor(
                 label = { Text("Notes") },
                 modifier = Modifier.fillMaxWidth().onFocusChanged { if (!it.isFocused) persist() },
             )
-            OutlinedButton(onClick = onDelete) { Text("Delete") }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedButton(onClick = onChangePrinting) { Text("Change Printing") }
+                OutlinedButton(onClick = onDelete) { Text("Delete") }
+            }
         }
     }
 

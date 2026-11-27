@@ -5,7 +5,7 @@ import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Transaction
-import androidx.room.Update
+import tcg.domain.Condition
 import tcg.domain.Game
 import tcg.domain.Language
 import tcg.domain.Printing
@@ -67,8 +67,11 @@ interface CollectionDao {
     @Query("SELECT * FROM owned_copy WHERE game = :game AND language = :language AND sourceId = :sourceId ORDER BY id")
     suspend fun ownedCopies(game: Game, language: Language, sourceId: String): List<OwnedCopyEntity>
 
-    @Update
-    suspend fun update(copy: OwnedCopyEntity)
+    @Query("UPDATE owned_copy SET condition = :condition, locationId = :locationId, notes = :notes WHERE id = :id")
+    suspend fun update(id: Long, condition: Condition, locationId: Long?, notes: String)
+
+    @Query("UPDATE owned_copy SET game = :game, language = :language, sourceId = :sourceId WHERE id = :id")
+    suspend fun move(id: Long, game: Game, language: Language, sourceId: String)
 
     @Query("DELETE FROM owned_copy WHERE id = :id")
     suspend fun delete(id: Long)

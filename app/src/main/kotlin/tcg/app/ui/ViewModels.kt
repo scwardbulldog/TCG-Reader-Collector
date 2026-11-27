@@ -13,6 +13,7 @@ import tcg.domain.LocationId
 import tcg.domain.OwnedCopy
 import tcg.domain.OwnedCopyId
 import tcg.domain.PrintingIdentifier
+import tcg.domain.collection.Card
 import tcg.domain.collection.CardView
 import tcg.domain.collection.CardViewState
 import tcg.domain.collection.CollectionFilter
@@ -124,6 +125,25 @@ class PrintingDetailViewModel(private val detailFor: (PrintingIdentifier, Locati
     fun confirmDelete(alsoDeleteCustomPrinting: Boolean = false) = launchOn { confirmDelete(alsoDeleteCustomPrinting) }
 
     fun rename(label: String) = launchOn { rename(label) }
+
+    /** Moves one Owned Copy to [target], then calls [onMoved] so the caller can open the target's detail. */
+    fun move(id: OwnedCopyId, target: PrintingIdentifier, onMoved: (PrintingIdentifier) -> Unit) =
+        launchOn {
+            move(id, target)
+            onMoved(target)
+        }
+
+    fun moveToNewCustom(id: OwnedCopyId, baseNumber: String, label: String, onMoved: (PrintingIdentifier) -> Unit) =
+        launchOn { onMoved(moveToNewCustom(id, baseNumber, label)) }
+
+    suspend fun ownCard(): CardViewState? = detail?.ownCard()
+
+    suspend fun searchCards(query: String): List<Card> = detail?.searchCards(query).orEmpty()
+
+    fun showCard(baseNumber: String, onLoaded: (CardViewState?) -> Unit) {
+        val target = detail ?: return
+        viewModelScope.launch { onLoaded(target.cardView(target.printing.game, baseNumber)) }
+    }
 
     fun createLocation(name: String, onCreated: (LocationId) -> Unit) =
         launchOn { onCreated(createLocation(name).id) }

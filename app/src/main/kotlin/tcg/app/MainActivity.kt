@@ -300,6 +300,7 @@ private fun CollectionApp(
                     top.printing,
                     locationFilter,
                     onOpenCard = { game, baseNumber -> stack = stack + Destination.OpenCard(game, baseNumber) },
+                    onMoved = { stack = stack.dropLast(1) + Destination.OpenPrinting(it) },
                     onBack = back,
                 )
             }

@@ -31,7 +31,12 @@ class InMemoryCollectionStore : CollectionStore {
 
     override suspend fun update(copy: OwnedCopy) {
         val index = copies.indexOfFirst { it.id == copy.id }
-        if (index >= 0) copies[index] = copy
+        if (index >= 0) copies[index] = copy.copy(printing = copies[index].printing)
+    }
+
+    override suspend fun move(id: OwnedCopyId, printing: PrintingIdentifier) {
+        val index = copies.indexOfFirst { it.id == id }
+        if (index >= 0) copies[index] = copies[index].copy(printing = printing)
     }
 
     override suspend fun delete(id: OwnedCopyId) {

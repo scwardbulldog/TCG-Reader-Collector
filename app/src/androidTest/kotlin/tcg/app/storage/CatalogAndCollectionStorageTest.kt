@@ -241,6 +241,20 @@ class CatalogAndCollectionStorageTest {
     }
 
     @Test
+    fun moving_an_owned_copy_changes_only_its_printing() = runTest {
+        val id = PrintingIdentifier(Game.OnePiece, Language.English, "OP01-001")
+        val target = PrintingIdentifier(Game.OnePiece, Language.Japanese, "OP01-001")
+        val binder = collection.createLocation("Binder 1")
+        val moved = collection.add(NewOwnedCopy(id, Condition.Damaged, binder.id, "creased"))
+        val stays = collection.add(NewOwnedCopy(id))
+
+        collection.move(moved.id, target)
+
+        assertEquals(listOf(stays), collection.ownedCopies(id))
+        assertEquals(listOf(moved.copy(printing = target)), collection.ownedCopies(target))
+    }
+
+    @Test
     fun the_catalog_version_is_stored_with_the_printings_per_language() = runTest {
         val zoro = PrintingIdentifier(Game.OnePiece, Language.English, "OP01-001_p1")
         assertNull(catalog.catalogVersion(Game.OnePiece, Language.English))

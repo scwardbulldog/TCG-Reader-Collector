@@ -135,4 +135,54 @@ class PrintingDetailTest {
 
         assertEquals(listOf(moved.copy(location = bulk.id)), filtered.state.value.copies)
     }
-}
+
+    @Test
+    fun `moving one Owned Copy to another Printing keeps its condition, Location and notes and leaves other copies alone`() = runTest {
+        val binder = collection.createLocation("Binder 1")
+        val moved = collection.add(NewOwnedCopy(zoro, Condition.Damaged, binder.id, "bent"))
+        val stays = collection.add(NewOwnedCopy(zoro))
+        val other = collection.add(NewOwnedCopy(nami))
+        detail.load()
+
+        detail.move(moved.id, nami)
+
+        assertEquals(listOf(stays), collection.ownedCopies(zoro))
+        assertEquals(listOf(moved.copy(printing = nami), other), collection.ownedCopies(nami))
+    }
+
+    @Test
+    fun `a copy on a flagged Printing can be moved to a Printing in another Language`() = runTest {
+        val japanese = PrintingIdentifier(Game.OnePiece, Language.Japanese, "OP01-001")
+        val copy = collection.add(NewOwnedCopy(zoro))
+        detail.load()
+
+        detail.move(copy.id, japanese)
+
+        assertEquals(listOf(copy.copy(printing = japanese)), collection.ownedCopies(japanese))
+        assertEquals(emptyList(), collection.ownedCopies(zoro))
+    }
+
+    @Test
+    fun `a copy can be moved to a new Custom Printing in the same Language`() = runTest {
+        val copy = collection.add(NewOwnedCopy(zoro, notes = "promo"))
+        val other = collection.add(NewOwnedCopy(zoro))
+        detail.load()
+
+        val target = detail.moveToNewCustom(copy.id, "op01-001", "Milk Box Stamp")
+
+        assertEquals(Language.English, target.language)
+        assertEquals("Milk Box Stamp", collection.customPrinting(target)?.name)
+        assertEquals(listOf(copy.copy(printing = target)), collection.ownedCopies(target))
+        assertEquals(listOf(other), collection.ownedCopies(zoro))
+    }
+
+    @Test
+    fun `saving a stale copy does not move it back to its old Printing`() = runTest {
+        val copy = collection.add(NewOwnedCopy(zoro))
+        detail.load()
+        detail.move(copy.id, nami)
+
+        detail.save(copy.copy(notes = "late edit"))
+
+        assertEquals(listOf(copy.copy(printing = nami, notes = "late edit")), collection.ownedCopies(nami))
+    }}

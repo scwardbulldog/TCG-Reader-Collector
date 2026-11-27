@@ -41,8 +41,11 @@ interface CollectionStore {
     suspend fun addAll(copies: List<NewOwnedCopy>): List<OwnedCopy>
     suspend fun ownedCopies(printing: PrintingIdentifier): List<OwnedCopy>
 
-    /** Saves a changed condition, Location or notes; the Printing of an Owned Copy never changes. */
+    /** Saves a changed condition, Location or notes. The Printing is left alone: [move] changes that. */
     suspend fun update(copy: OwnedCopy)
+
+    /** Moves one Owned Copy to [printing], which may be any Printing; its condition, Location and notes stay. */
+    suspend fun move(id: OwnedCopyId, printing: PrintingIdentifier)
 
     suspend fun delete(id: OwnedCopyId)
 
