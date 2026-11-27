@@ -10,6 +10,8 @@ Work up this ladder and stop at the first rung that doesn't apply to the ticket:
 2. `.\gradlew.bat :app:connectedDebugAndroidTest` is green on the attached device. Needed when storage, migrations or anything in `app/src/androidTest` is touched.
 3. `.\gradlew.bat :app:installDebug` puts the fresh debug build on the device, then the owner checks it by hand. Needed for any UI or device-visible change.
 
+Alongside the ladder, update the docs your change makes wrong in the same commit: [docs/architecture.md](../architecture.md) for a changed module, interface or flow, [catalog-format.md](../catalog-format.md) for the Catalog file, [GLOSSARY.md](../../GLOSSARY.md) for a new or sharpened term, and an ADR only for a decision someone would otherwise re-open.
+
 Rungs 2 and 3 need a device. If none is attached, finish the JVM work, say the device steps are pending, and hand over. Don't stall or ask whether the phone is plugged in.
 
 ## Handing over
