@@ -44,6 +44,7 @@ import tcg.domain.Location
 import tcg.domain.LocationId
 import tcg.domain.OwnedCopy
 import tcg.domain.PrintingIdentifier
+import tcg.domain.isCustom
 import tcg.domain.onepiece.OnePiece
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -57,7 +58,7 @@ fun PrintingDetailScreen(
     LaunchedEffect(printing) { viewModel.show(printing, locationFilter) }
     val state = viewModel.state
     val entry = state.details
-
+    var renaming by remember { mutableStateOf(false) }
     // Deleting the last Owned Copy leaves nothing to show. Reads the view model afresh because
     // the previous visit's state can still be in the first frame.
     LaunchedEffect(state.loaded, state.copies.isEmpty()) {
@@ -80,7 +81,7 @@ fun PrintingDetailScreen(
                 printing.language.label(),
                 entry?.rarity,
                 entry?.releaseProduct,
-                entry?.let { OnePiece.variantOf(printing.sourceId).label() },
+                entry?.let { OnePiece.variantOf(printing)?.label() },
             )
             Row(
                 Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
@@ -91,6 +92,9 @@ fun PrintingDetailScreen(
                     Text(header.joinToString(" · "), style = MaterialTheme.typography.bodyMedium)
                     if (state.noLongerInCatalog) NoLongerInCatalogFlag()
                     if (state.unresolved) UnresolvedPrintingFlag()
+                    if (printing.isCustom && entry != null) {
+                        TextButton(onClick = { renaming = true }) { Text("Rename") }
+                    }
                 }
             }
             LazyColumn(
@@ -111,16 +115,41 @@ fun PrintingDetailScreen(
         }
     }
 
-    if (state.pendingDelete != null) DeleteConfirmation(viewModel)
+    if (renaming && entry != null) {
+        CustomPrintingDialog(
+            title = "Rename custom Printing",
+            language = printing.language.label(),
+            baseNumber = null,
+            initialLabel = entry.name,
+            onDismiss = { renaming = false },
+            onSave = { _, label ->
+                renaming = false
+                viewModel.rename(label)
+            },
+        )
+    }
+    if (state.pendingDelete != null) DeleteConfirmation(viewModel, offerCustomDelete = printing.isCustom && state.totalCopies == 1)
 }
 
 @Composable
-private fun DeleteConfirmation(viewModel: PrintingDetailViewModel) {
+private fun DeleteConfirmation(viewModel: PrintingDetailViewModel, offerCustomDelete: Boolean) {
     AlertDialog(
         onDismissRequest = viewModel::cancelDelete,
         title = { Text("Delete this Owned Copy?") },
-        text = { Text("This removes the copy from your Collection and cannot be undone.") },
-        confirmButton = { TextButton(onClick = viewModel::confirmDelete) { Text("Delete") } },
+        text = {
+            Text(
+                "This removes the copy from your Collection and cannot be undone." +
+                    if (offerCustomDelete) " It is the last copy of this custom Printing, which can be deleted too." else "",
+            )
+        },
+        confirmButton = {
+            Row {
+                if (offerCustomDelete) {
+                    TextButton(onClick = { viewModel.confirmDelete(alsoDeleteCustomPrinting = true) }) { Text("Delete both") }
+                }
+                TextButton(onClick = { viewModel.confirmDelete() }) { Text("Delete") }
+            }
+        },
         dismissButton = { TextButton(onClick = viewModel::cancelDelete) { Text("Cancel") } },
     )
 }
@@ -217,6 +246,48 @@ internal fun Picker(label: String, value: String, options: List<Pair<String, () 
             }
         }
     }
+}
+
+/** Collects the label of a Custom Printing. With a [baseNumber] it also lets the collector correct it; without one it only renames. */
+@Composable
+internal fun CustomPrintingDialog(
+    title: String,
+    language: String,
+    baseNumber: String?,
+    initialLabel: String = "",
+    onDismiss: () -> Unit,
+    onSave: (baseNumber: String, label: String) -> Unit,
+) {
+    var number by remember { mutableStateOf(baseNumber.orEmpty()) }
+    var label by remember { mutableStateOf(initialLabel) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(title) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (baseNumber != null) {
+                    OutlinedTextField(
+                        value = number,
+                        onValueChange = { number = it },
+                        label = { Text("Base Number ($language)") },
+                        singleLine = true,
+                    )
+                }
+                OutlinedTextField(
+                    value = label,
+                    onValueChange = { label = it },
+                    label = { Text("Label, e.g. Milk Box Stamp") },
+                    singleLine = true,
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = { onSave(number.trim(), label.trim()) }, enabled = label.isNotBlank() && (baseNumber == null || number.isNotBlank())) {
+                Text("Save")
+            }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+    )
 }
 
 @Composable

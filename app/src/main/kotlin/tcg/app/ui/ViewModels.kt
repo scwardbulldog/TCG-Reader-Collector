@@ -90,7 +90,9 @@ class PrintingDetailViewModel(private val detailFor: (PrintingIdentifier, Locati
         detail?.cancelDelete()
     }
 
-    fun confirmDelete() = launchOn { confirmDelete() }
+    fun confirmDelete(alsoDeleteCustomPrinting: Boolean = false) = launchOn { confirmDelete(alsoDeleteCustomPrinting) }
+
+    fun rename(label: String) = launchOn { rename(label) }
 
     fun createLocation(name: String, onCreated: (LocationId) -> Unit) =
         launchOn { onCreated(createLocation(name).id) }

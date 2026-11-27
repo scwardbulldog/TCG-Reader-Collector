@@ -5,6 +5,7 @@ import tcg.domain.CollectionStore
 import tcg.domain.Printing
 import tcg.domain.PrintingIdentifier
 import tcg.domain.catalog.CatalogTarget
+import tcg.domain.isCustom
 
 /** A Printing's details as the Collection shows them. */
 data class PrintingEntry(
@@ -26,9 +27,9 @@ class LastKnownPrintings(private val collection: CollectionStore, private val ca
         collection.rememberPrintings(current)
     }
 
-    /** The Catalog's details, else the last-known ones; null for an Unresolved Printing. */
+    /** The Catalog's details, else the saved ones; null for an Unresolved Printing. A Custom Printing is never "no longer in the Catalog". */
     suspend fun resolve(identifier: PrintingIdentifier): PrintingEntry? {
         catalog.find(identifier)?.let { return PrintingEntry(it, noLongerInCatalog = false) }
-        return collection.lastKnownPrinting(identifier)?.let { PrintingEntry(it, noLongerInCatalog = true) }
+        return collection.lastKnownPrinting(identifier)?.let { PrintingEntry(it, noLongerInCatalog = !identifier.isCustom) }
     }
 }

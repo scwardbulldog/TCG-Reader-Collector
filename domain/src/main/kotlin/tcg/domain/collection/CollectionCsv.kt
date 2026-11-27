@@ -36,7 +36,7 @@ object CollectionCsv {
             printing?.baseNumber.orEmpty(),
             "${id.game.code()} / ${id.language.code()} / ${id.sourceId}",
             printing?.name.orEmpty(),
-            if (printing == null) "" else OnePiece.variantOf(id.sourceId).label(),
+            printing?.let { OnePiece.variantOf(id)?.label() }.orEmpty(),
             printing?.releaseProduct.orEmpty(),
             copy.condition.label(),
             copy.location?.let { locations[it] }.orEmpty(),

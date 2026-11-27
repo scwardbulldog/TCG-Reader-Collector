@@ -1,6 +1,8 @@
 package tcg.domain.onepiece
 
+import tcg.domain.PrintingIdentifier
 import tcg.domain.Variant
+import tcg.domain.isCustom
 
 /** One Piece-specific rules. Other Games do not inherit Bandai's suffix meanings. */
 object OnePiece {
@@ -12,6 +14,10 @@ object OnePiece {
         reprintSuffix.containsMatchIn(sourceId) -> Variant.Reprint
         else -> Variant.Normal
     }
+
+    /** The Variant of a Printing; null for a Custom Printing, which the collector named and which has none. */
+    fun variantOf(identifier: PrintingIdentifier): Variant? =
+        if (identifier.isCustom) null else variantOf(identifier.sourceId)
 
     // OCR often swaps look-alike characters, so digit positions also accept letters that resemble digits.
     private const val DIGIT = "[0-9OQDIL|!SBZ]"

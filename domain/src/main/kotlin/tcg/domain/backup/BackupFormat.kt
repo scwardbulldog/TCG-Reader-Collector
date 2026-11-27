@@ -15,7 +15,10 @@ import tcg.domain.Location
 import tcg.domain.LocationId
 import tcg.domain.OwnedCopy
 import tcg.domain.OwnedCopyId
+import tcg.domain.Printing
 import tcg.domain.PrintingIdentifier
+import tcg.domain.isCustom
+import tcg.domain.collection.CustomPrintings
 import java.security.MessageDigest
 import java.time.Instant
 
@@ -25,7 +28,7 @@ class BackupFormatException(message: String, cause: Throwable? = null) : Excepti
 class ParsedBackup(val snapshot: CollectionSnapshot, val createdAt: Instant)
 
 /**
- * The versioned JSON backup file. It holds Owned Copies and Locations only: never Catalog details or images.
+ * The versioned JSON backup file. It holds Owned Copies, Locations and Custom Printings only: never Catalog details or images.
  * [parse] checks the whole file and either returns all of it or throws [BackupFormatException].
  */
 object BackupFormat {
@@ -41,6 +44,16 @@ object BackupFormat {
         val createdAt: String,
         val locations: List<LocationEntry>,
         val ownedCopies: List<CopyEntry>,
+        val customPrintings: List<CustomPrintingEntry> = emptyList(),
+    )
+
+    @Serializable
+    private class CustomPrintingEntry(
+        val game: String,
+        val language: String,
+        val sourceId: String,
+        val baseNumber: String,
+        val label: String,
     )
 
     @Serializable
@@ -107,6 +120,15 @@ object BackupFormat {
                 notes = it.notes,
             )
         },
+        customPrintings = snapshot.customPrintings.sortedBy { it.identifier.sourceId }.map {
+            CustomPrintingEntry(
+                game = it.identifier.game.code(),
+                language = it.identifier.language.code(),
+                sourceId = it.identifier.sourceId,
+                baseNumber = it.baseNumber,
+                label = it.name,
+            )
+        },
     )
 
     private fun snapshot(file: File): CollectionSnapshot {
@@ -130,7 +152,26 @@ object BackupFormat {
                 notes = entry.notes,
             )
         }
-        return CollectionSnapshot(file.locations.map { Location(LocationId(it.id), it.name) }, copies)
+        val customPrintings = file.customPrintings.map { entry ->
+            if (!PrintingIdentifier(game(entry.game), language(entry.language), entry.sourceId).isCustom) {
+                throw BackupFormatException("The backup has a Custom Printing with an invalid identifier")
+            }
+            if (entry.baseNumber.isBlank() || entry.label.isBlank()) {
+                throw BackupFormatException("The backup has a Custom Printing with no Base Number or label")
+            }
+            Printing(
+                identifier = PrintingIdentifier(game(entry.game), language(entry.language), entry.sourceId),
+                baseNumber = entry.baseNumber,
+                releaseProduct = CustomPrintings.RELEASE_PRODUCT,
+                rarity = "",
+                name = entry.label,
+                imageUrl = "",
+            )
+        }
+        if (customPrintings.map { it.identifier }.toSet().size != customPrintings.size) {
+            throw BackupFormatException("The backup has duplicate Custom Printings")
+        }
+        return CollectionSnapshot(file.locations.map { Location(LocationId(it.id), it.name) }, copies, customPrintings)
     }
 
     private fun createdAt(text: String): Instant = try {

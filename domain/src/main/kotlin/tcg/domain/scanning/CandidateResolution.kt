@@ -14,8 +14,9 @@ suspend fun resolveCandidates(catalog: CatalogStore, game: Game, language: Langu
 internal fun List<Printing>.inCandidateOrder(): List<Printing> =
     sortedWith(compareBy<Printing>({ candidateRank(it) }, { it.identifier.sourceId }))
 
-internal fun candidateRank(printing: Printing): Int = when (OnePiece.variantOf(printing.identifier.sourceId)) {
+internal fun candidateRank(printing: Printing): Int = when (OnePiece.variantOf(printing.identifier)) {
     Variant.Normal -> 0
     Variant.Reprint -> 1
     Variant.AlternateArt -> 2
+    null -> 3
 }

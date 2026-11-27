@@ -3,6 +3,8 @@ package tcg.app.storage
 import tcg.domain.CollectionSnapshot
 import tcg.domain.CollectionStore
 import tcg.domain.DeleteLocationResult
+import tcg.domain.Game
+import tcg.domain.Language
 import tcg.domain.Location
 import tcg.domain.LocationId
 import tcg.domain.NewOwnedCopy
@@ -59,6 +61,12 @@ class RoomCollectionStore(private val dao: CollectionDao) : CollectionStore {
     override suspend fun lastKnownPrinting(identifier: PrintingIdentifier): Printing? =
         dao.knownPrinting(identifier.game, identifier.language, identifier.sourceId)?.toDomain()
 
+    override suspend fun customPrintings(game: Game, language: Language): List<Printing> =
+        dao.customPrintings(game, language).map { it.toDomain() }
+
+    override suspend fun deleteCustomPrinting(identifier: PrintingIdentifier) =
+        dao.deleteCustomPrinting(identifier.game, identifier.language, identifier.sourceId)
+
     override suspend fun createLocation(name: String): Location =
         Location(LocationId(dao.insertLocation(LocationEntity(name = name))), name)
 
@@ -72,8 +80,12 @@ class RoomCollectionStore(private val dao: CollectionDao) : CollectionStore {
         if (dao.deleteLocationIfEmpty(id.value)) DeleteLocationResult.Deleted else DeleteLocationResult.NotEmpty
 
     override suspend fun snapshot(): CollectionSnapshot {
-        val (locations, copies) = dao.snapshot()
-        return CollectionSnapshot(locations.map { Location(LocationId(it.id), it.name) }, copies.map { it.toDomain() })
+        val (locations, copies, custom) = dao.snapshot()
+        return CollectionSnapshot(
+            locations.map { Location(LocationId(it.id), it.name) },
+            copies.map { it.toDomain() },
+            custom.map { it.toDomain() },
+        )
     }
 
     override suspend fun replaceCollection(snapshot: CollectionSnapshot) = dao.replaceAll(
@@ -89,6 +101,7 @@ class RoomCollectionStore(private val dao: CollectionDao) : CollectionStore {
                 notes = it.notes,
             )
         },
+        snapshot.customPrintings.map { it.toKnownEntity() },
     )
 }
 

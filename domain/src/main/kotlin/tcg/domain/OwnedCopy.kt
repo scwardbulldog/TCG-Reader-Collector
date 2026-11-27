@@ -20,8 +20,15 @@ data class OwnedCopy(
     val notes: String,
 )
 
-/** Everything the Collection holds, with the ids its records have. Backups carry it and restores replace the Collection with it. */
-data class CollectionSnapshot(val locations: List<Location>, val copies: List<OwnedCopy>)
+/**
+ * Everything the Collection holds, with the ids its records have. Backups carry it and restores replace the Collection with it.
+ * [customPrintings] are the Printings the collector created; other Printing details come from the Catalog and are not carried.
+ */
+data class CollectionSnapshot(
+    val locations: List<Location>,
+    val copies: List<OwnedCopy>,
+    val customPrintings: List<Printing> = emptyList(),
+)
 
 data class NewOwnedCopy(
     val printing: PrintingIdentifier,

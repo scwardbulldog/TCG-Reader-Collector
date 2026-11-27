@@ -233,6 +233,25 @@ class CatalogAndCollectionStorageTest {
     }
 
     @Test
+    fun custom_printings_are_listed_per_language_survive_a_replace_that_carries_them_and_can_be_deleted() = runTest {
+        val custom = PrintingIdentifier(Game.OnePiece, Language.English, "custom:1")
+        val zoro = PrintingIdentifier(Game.OnePiece, Language.English, "OP01-001_p1")
+        val milk = printing(custom).copy(baseNumber = "OP01-001", releaseProduct = "Custom", name = "Milk Box Stamp")
+        collection.rememberPrintings(listOf(milk, printing(zoro)))
+
+        assertEquals(listOf(milk), collection.customPrintings(Game.OnePiece, Language.English))
+        assertEquals(emptyList(), collection.customPrintings(Game.OnePiece, Language.Japanese))
+        assertEquals(listOf(milk), collection.snapshot().customPrintings)
+
+        collection.replaceCollection(CollectionSnapshot(emptyList(), emptyList(), listOf(milk)))
+        assertEquals(listOf(milk), collection.customPrintings(Game.OnePiece, Language.English))
+        assertNull(collection.lastKnownPrinting(zoro))
+
+        collection.deleteCustomPrinting(custom)
+        assertNull(collection.lastKnownPrinting(custom))
+    }
+
+    @Test
     fun a_replace_that_fails_part_way_leaves_the_old_collection_intact() = runTest {
         val zoro = PrintingIdentifier(Game.OnePiece, Language.English, "OP01-001_p1")
         val binder = collection.createLocation("Binder 1")

@@ -145,6 +145,7 @@ private fun InputForm(viewModel: ScanViewModel) {
     val result = viewModel.result
     val scope = viewModel.sessionInput?.session?.scope
     val bulkMode = viewModel.mode == ScanMode.Bulk
+    var customDialog by remember { mutableStateOf<String?>(null) }
     Column(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             ScanMode.entries.forEach {
@@ -209,7 +210,20 @@ private fun InputForm(viewModel: ScanViewModel) {
                 )
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedButton(onClick = viewModel::searchManually) { Text("Search manually") }
+                    OutlinedButton(onClick = { customDialog = result.baseNumber }) { Text("Create custom Printing") }
                     TextButton(onClick = viewModel::skip) { Text("Skip") }
+                }
+                customDialog?.let { base ->
+                    CustomPrintingDialog(
+                        title = "New custom Printing",
+                        language = viewModel.sessionInput?.session?.language?.label().orEmpty(),
+                        baseNumber = base,
+                        onDismiss = { customDialog = null },
+                        onSave = { number, label ->
+                            customDialog = null
+                            viewModel.createCustomPrinting(number, label)
+                        },
+                    )
                 }
             }
             is ScanInputResult.SearchResults -> {
@@ -280,7 +294,7 @@ internal fun PrintingRow(printing: Printing, modifier: Modifier = Modifier) {
         PrintingImage(printing.imageUrl, Modifier.width(64.dp))
         Column(Modifier.weight(1f)) {
             Text(printing.name, style = MaterialTheme.typography.titleMedium)
-            val variant = OnePiece.variantOf(printing.identifier.sourceId).label()
+            val variant = OnePiece.variantOf(printing.identifier)?.label().orEmpty()
             Text(
                 listOf(printing.baseNumber, variant, printing.rarity, printing.releaseProduct)
                     .filter { it.isNotBlank() }.joinToString(" · "),

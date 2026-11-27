@@ -70,6 +70,15 @@ interface CollectionDao {
     @Query("SELECT * FROM known_printing WHERE game = :game AND language = :language AND sourceId = :sourceId")
     suspend fun knownPrinting(game: Game, language: Language, sourceId: String): KnownPrintingEntity?
 
+    @Query("SELECT * FROM known_printing WHERE game = :game AND language = :language AND sourceId LIKE 'custom:%'")
+    suspend fun customPrintings(game: Game, language: Language): List<KnownPrintingEntity>
+
+    @Query("SELECT * FROM known_printing WHERE sourceId LIKE 'custom:%'")
+    suspend fun allCustomPrintings(): List<KnownPrintingEntity>
+
+    @Query("DELETE FROM known_printing WHERE game = :game AND language = :language AND sourceId = :sourceId AND sourceId LIKE 'custom:%'")
+    suspend fun deleteCustomPrinting(game: Game, language: Language, sourceId: String)
+
     @Insert
     suspend fun insertLocation(location: LocationEntity): Long
 
@@ -107,18 +116,20 @@ interface CollectionDao {
     @Query("DELETE FROM known_printing")
     suspend fun deleteAllKnownPrintings()
 
-    /** One transaction, so the Locations and Owned Copies are read as of the same moment. */
+    /** One transaction, so the Locations, Owned Copies and Custom Printings are read as of the same moment. */
     @Transaction
-    suspend fun snapshot(): Pair<List<LocationEntity>, List<OwnedCopyEntity>> = locations() to allCopies()
+    suspend fun snapshot(): Triple<List<LocationEntity>, List<OwnedCopyEntity>, List<KnownPrintingEntity>> =
+        Triple(locations(), allCopies(), allCustomPrintings())
 
     /** One transaction: a failed insert rolls back the deletes too, leaving the old Collection in place. */
     @Transaction
-    suspend fun replaceAll(locations: List<LocationEntity>, copies: List<OwnedCopyEntity>) {
+    suspend fun replaceAll(locations: List<LocationEntity>, copies: List<OwnedCopyEntity>, customPrintings: List<KnownPrintingEntity>) {
         deleteAllCopies()
         deleteAllLocations()
         deleteAllKnownPrintings()
         insertLocations(locations)
         insertAll(copies)
+        upsertKnownPrintings(customPrintings)
     }
 }
 

@@ -93,6 +93,7 @@ class ScanViewModel(
         private set
     var confirmation by mutableStateOf<Confirmation?>(null)
         private set
+    private var justCreated: Printing? = null
 
     /** The last add, shown on the input screen so the collector sees it landed. */
     var lastAdded by mutableStateOf<String?>(null)
@@ -306,6 +307,17 @@ class ScanViewModel(
     /** Gives up on a no-match: nothing is added. */
     fun skip() = clearInput()
 
+    /** Creates a Custom Printing for a no-match and proposes it for confirmation like any other Printing. */
+    fun createCustomPrinting(baseNumber: String, label: String) {
+        val current = sessionInput ?: return
+        viewModelScope.launch {
+            val printing = current.createCustomPrinting(baseNumber, label)
+            justCreated = printing
+            result = ScanInputResult.None
+            confirmation = Confirmation(listOf(printing), selected = printing)
+        }
+    }
+
     fun openSearchResult(printing: Printing) {
         confirmation = Confirmation(listOf(printing), selected = printing)
     }
@@ -323,8 +335,17 @@ class ScanViewModel(
     }
 
     fun cancelConfirmation() {
+        discardUnusedCustomPrinting()
         confirmation = null
         finishVerdict()
+    }
+
+    // A Custom Printing made for a no-match and then not added would otherwise linger with no way to delete it.
+    private fun discardUnusedCustomPrinting() {
+        val created = justCreated ?: return
+        justCreated = null
+        val current = sessionInput ?: return
+        viewModelScope.launch { current.discardCustomPrinting(created) }
     }
 
     fun confirm() {
@@ -333,12 +354,14 @@ class ScanViewModel(
         val printing = pending.selected ?: return
         viewModelScope.launch {
             val added = current.add(printing, pending.count, pending.condition ?: current.session.defaultCondition)
+            justCreated = null
             lastAdded = "Added ${added.size} × ${printing.name} (${printing.baseNumber})"
             clearInput()
         }
     }
 
     private fun clearInput() {
+        justCreated = null
         query = ""
         result = ScanInputResult.None
         confirmation = null

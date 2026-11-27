@@ -23,7 +23,7 @@ interface CatalogStore {
 enum class DeleteLocationResult { Deleted, NotEmpty }
 
 /**
- * The Collection: Owned Copies and Locations. An Owned Copy may reference a
+ * The Collection: Owned Copies, Locations and Custom Printings. An Owned Copy may reference a
  * Printing identifier the Catalog does not contain.
  */
 interface CollectionStore {
@@ -47,6 +47,15 @@ interface CollectionStore {
     /** The details last saved by [rememberPrintings]; null if none were. */
     suspend fun lastKnownPrinting(identifier: PrintingIdentifier): Printing?
 
+    /**
+     * The Custom Printings of one Game and Language. They are saved with [rememberPrintings], which keeps them
+     * apart from the Catalog, and a Catalog refresh never touches them.
+     */
+    suspend fun customPrintings(game: Game, language: Language): List<Printing>
+
+    /** Removes a Custom Printing's saved details. Callers make sure no Owned Copy still uses it. */
+    suspend fun deleteCustomPrinting(identifier: PrintingIdentifier)
+
     suspend fun createLocation(name: String): Location
 
     suspend fun locations(): List<Location>
@@ -59,8 +68,8 @@ interface CollectionStore {
     suspend fun snapshot(): CollectionSnapshot
 
     /**
-     * Replaces the whole Collection (Owned Copies, Locations and saved last-known Printings) with [snapshot],
-     * keeping its ids. Atomic: a failure part-way leaves the existing Collection unchanged.
+     * Replaces the whole Collection (Owned Copies, Locations and Custom Printings) with [snapshot],
+     * keeping its ids and dropping saved last-known Printings. Atomic: a failure part-way leaves the existing Collection unchanged.
      */
     suspend fun replaceCollection(snapshot: CollectionSnapshot)
 }

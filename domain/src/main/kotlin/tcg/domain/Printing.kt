@@ -13,4 +13,10 @@ data class Printing(
     val imageUrl: String,
 )
 
+/** Custom Printing ids live in this namespace, which no Bandai ID (or ID the Catalog pipeline derives) can enter. */
+const val CUSTOM_ID_PREFIX = "custom:"
+
+/** True for a Custom Printing: one the collector recorded because the Catalog has none. */
+val PrintingIdentifier.isCustom: Boolean get() = sourceId.startsWith(CUSTOM_ID_PREFIX)
+
 enum class Variant { Normal, AlternateArt, Reprint }

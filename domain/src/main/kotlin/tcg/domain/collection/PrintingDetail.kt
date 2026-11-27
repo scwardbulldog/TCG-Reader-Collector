@@ -19,6 +19,8 @@ data class PrintingDetailState(
     val details: Printing? = null,
     val noLongerInCatalog: Boolean = false,
     val copies: List<OwnedCopy> = emptyList(),
+    /** How many Owned Copies the Printing has in all, whatever the Location filter hides. */
+    val totalCopies: Int = 0,
     val locations: List<Location> = emptyList(),
     /** The Owned Copy awaiting delete confirmation; nothing is deleted until [PrintingDetail.confirmDelete]. */
     val pendingDelete: OwnedCopyId? = null,
@@ -39,11 +41,13 @@ class PrintingDetail(
 ) {
     private val mutableState = MutableStateFlow(PrintingDetailState())
     private val printings = LastKnownPrintings(collection, catalog)
+    private val customPrintings = CustomPrintings(collection)
     val state: StateFlow<PrintingDetailState> = mutableState.asStateFlow()
     private var shown: Set<OwnedCopyId> = emptySet()
 
     suspend fun load() {
-        val copies = collection.ownedCopies(printing).filter { location == null || it.location == location }
+        val all = collection.ownedCopies(printing)
+        val copies = all.filter { location == null || it.location == location }
         shown = copies.map { it.id }.toSet()
         val entry = printings.resolve(printing)
         mutableState.value = PrintingDetailState(
@@ -51,6 +55,7 @@ class PrintingDetail(
             details = entry?.printing,
             noLongerInCatalog = entry?.noLongerInCatalog ?: false,
             copies = copies,
+            totalCopies = all.size,
             locations = collection.locations(),
         )
     }
@@ -68,11 +73,19 @@ class PrintingDetail(
         mutableState.value = mutableState.value.copy(pendingDelete = null)
     }
 
-    suspend fun confirmDelete() {
+    /** Deletes the pending Owned Copy; with [alsoDeleteCustomPrinting], a Custom Printing left with no copies goes too. */
+    suspend fun confirmDelete(alsoDeleteCustomPrinting: Boolean = false) {
         val id = mutableState.value.pendingDelete ?: return
         collection.delete(id)
+        if (alsoDeleteCustomPrinting) customPrintings.delete(printing)
         mutableState.value = mutableState.value.copy(pendingDelete = null)
         reloadCopies()
+    }
+
+    /** Renames a Custom Printing; the new label shows on every Owned Copy of it. */
+    suspend fun rename(label: String) {
+        val renamed = customPrintings.rename(printing, label) ?: return
+        mutableState.value = mutableState.value.copy(details = renamed)
     }
 
     suspend fun createLocation(name: String): Location {
@@ -82,8 +95,10 @@ class PrintingDetail(
     }
 
     private suspend fun reloadCopies() {
+        val all = collection.ownedCopies(printing)
         mutableState.value = mutableState.value.copy(
-            copies = collection.ownedCopies(printing).filter { location == null || it.id in shown },
+            copies = all.filter { location == null || it.id in shown },
+            totalCopies = all.size,
         )
     }
 }

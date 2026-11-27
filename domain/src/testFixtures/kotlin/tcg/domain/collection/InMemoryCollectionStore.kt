@@ -3,6 +3,8 @@ package tcg.domain.collection
 import tcg.domain.CollectionSnapshot
 import tcg.domain.CollectionStore
 import tcg.domain.DeleteLocationResult
+import tcg.domain.Game
+import tcg.domain.Language
 import tcg.domain.Location
 import tcg.domain.LocationId
 import tcg.domain.NewOwnedCopy
@@ -10,6 +12,7 @@ import tcg.domain.OwnedCopy
 import tcg.domain.OwnedCopyId
 import tcg.domain.Printing
 import tcg.domain.PrintingIdentifier
+import tcg.domain.isCustom
 
 class InMemoryCollectionStore : CollectionStore {
     private val copies = mutableListOf<OwnedCopy>()
@@ -43,6 +46,13 @@ class InMemoryCollectionStore : CollectionStore {
 
     override suspend fun lastKnownPrinting(identifier: PrintingIdentifier): Printing? = lastKnown[identifier]
 
+    override suspend fun customPrintings(game: Game, language: Language): List<Printing> =
+        lastKnown.values.filter { it.identifier.isCustom && it.identifier.game == game && it.identifier.language == language }
+
+    override suspend fun deleteCustomPrinting(identifier: PrintingIdentifier) {
+        if (identifier.isCustom) lastKnown.remove(identifier)
+    }
+
     override suspend fun createLocation(name: String): Location =
         Location(LocationId(nextId++), name).also(locations::add)
 
@@ -59,7 +69,8 @@ class InMemoryCollectionStore : CollectionStore {
         return DeleteLocationResult.Deleted
     }
 
-    override suspend fun snapshot(): CollectionSnapshot = CollectionSnapshot(locations.toList(), copies.toList())
+    override suspend fun snapshot(): CollectionSnapshot =
+        CollectionSnapshot(locations.toList(), copies.toList(), lastKnown.values.filter { it.identifier.isCustom })
 
     override suspend fun replaceCollection(snapshot: CollectionSnapshot) {
         copies.clear()
@@ -67,6 +78,7 @@ class InMemoryCollectionStore : CollectionStore {
         locations.clear()
         locations.addAll(snapshot.locations)
         lastKnown.clear()
+        snapshot.customPrintings.forEach { lastKnown[it.identifier] = it }
         nextId = maxOf(nextId, (snapshot.copies.map { it.id.value } + snapshot.locations.map { it.id.value }).maxOrNull()?.plus(1) ?: 1)
     }
 }

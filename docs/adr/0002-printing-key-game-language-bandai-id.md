@@ -12,5 +12,6 @@ A **Printing** is identified by **Game** + **Language** + Bandai's own card-list
 
 - The same key is used in the **Catalog**, **Owned Copy** references, CSV exports and JSON backups.
 - If a refresh drops a **Printing**, the **Owned Copy** is kept and flagged; it is never remapped by **Base Number**.
+- A **Custom Printing** ([#43](https://github.com/scwardbulldog/TCG-Reader-Collector/issues/43)) uses the same key shape with a locally generated ID in the `custom:` namespace (`custom:<uuid>`), which no Bandai ID or derived ID can enter. It is stored with the Collection and never remapped to a later Catalog **Printing**.
 
 Source: [What uniquely identifies a Printing, and how are Variants and reprints modelled?](https://github.com/scwardbulldog/TCG-Reader-Collector/issues/8), [What must the v1 spec preserve to support another Game later?](https://github.com/scwardbulldog/TCG-Reader-Collector/issues/14#issuecomment-7172867774). See [the v1 spec](../spec/v1.md), sections 4 and 8.

@@ -6,6 +6,7 @@ import tcg.domain.Condition
 import tcg.domain.OwnedCopy
 import tcg.domain.NewOwnedCopy
 import tcg.domain.Printing
+import tcg.domain.collection.CustomPrintings
 
 /** What a Base Number (read or typed) turned up in the session's Language. */
 sealed interface ScanLookup {
@@ -15,7 +16,7 @@ sealed interface ScanLookup {
      */
     data class Candidates(val printings: List<Printing>, val preselected: Printing?) : ScanLookup
 
-    /** Nothing in the Catalog matches; the collector can search manually or skip. */
+    /** Nothing in the Catalog or the Collection's Custom Printings matches; the collector can search manually, create a Custom Printing or skip. */
     data class NoMatch(val baseNumber: String) : ScanLookup
 }
 
@@ -25,18 +26,33 @@ class ScanSessionInput(
     private val catalog: CatalogStore,
     private val collection: CollectionStore,
 ) {
+    private val customPrintings = CustomPrintings(collection)
+
     suspend fun lookup(baseNumber: String): ScanLookup {
         val typed = baseNumber.trim()
-        val printings = resolveCandidates(catalog, session.game, session.language, typed.uppercase())
+        val base = typed.uppercase()
+        val printings = (
+            catalog.findByBaseNumber(session.game, session.language, base) +
+                customPrintings.forBaseNumber(session.game, session.language, base)
+            ).inCandidateOrder()
         if (printings.isEmpty()) return ScanLookup.NoMatch(typed)
         return ScanLookup.Candidates(printings, preselected = printings.singleOrNull())
+    }
+
+    /** Creates a Custom Printing in the session's Language for a no-match and proposes it like any candidate. */
+    suspend fun createCustomPrinting(baseNumber: String, label: String): Printing =
+        customPrintings.create(session.game, session.language, baseNumber, label)
+
+    /** Drops a Custom Printing the collector created but then did not add, so no unused one is left behind. */
+    suspend fun discardCustomPrinting(printing: Printing) {
+        customPrintings.delete(printing.identifier)
     }
 
     /** Manual search by Base Number or name, in the session's Language only. */
     suspend fun search(query: String): List<Printing> {
         val trimmed = query.trim()
         if (trimmed.isEmpty()) return emptyList()
-        return catalog.search(session.game, session.language, trimmed)
+        return (catalog.search(session.game, session.language, trimmed) + customPrintings.search(session.game, session.language, trimmed))
             .sortedWith(compareBy({ it.baseNumber }, { candidateRank(it) }, { it.identifier.sourceId }))
     }
 
