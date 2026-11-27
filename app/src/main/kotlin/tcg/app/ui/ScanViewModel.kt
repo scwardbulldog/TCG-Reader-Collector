@@ -1,5 +1,6 @@
 package tcg.app.ui
 
+import android.graphics.Bitmap
 import android.os.SystemClock
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -18,6 +19,8 @@ import tcg.domain.Printing
 import tcg.domain.scanning.BaseNumberLocker
 import tcg.domain.scanning.BaseNumberRead
 import tcg.domain.scanning.Batch
+import tcg.domain.scanning.BatchRow
+import tcg.domain.scanning.BatchRowId
 import tcg.domain.scanning.BulkCapture
 import tcg.domain.scanning.BulkStatus
 import tcg.domain.scanning.PhotoId
@@ -53,6 +56,7 @@ class ScanViewModel(
     private var locker = BaseNumberLocker()
     private var bulk: BulkCapture? = null
     private var bulkStatusJob: Job? = null
+    private var bulkRowsJob: Job? = null
 
     var setup by mutableStateOf(ScanSetup())
         private set
@@ -68,6 +72,17 @@ class ScanViewModel(
     /** Bulk Add progress; all zero in Single mode. */
     var bulkStatus by mutableStateOf(BulkStatus())
         private set
+
+    /** The Bulk Add review list: failed rows first, then ambiguous, then resolved. */
+    var bulkRows by mutableStateOf<List<BatchRow>>(emptyList())
+        private set
+
+    /** True while the review list replaces the camera. */
+    var reviewing by mutableStateOf(false)
+        private set
+
+    /** Cards snapped but not yet added: photos still being read plus everything in the review list. */
+    val unsavedCards: Int get() = (bulkStatus.snapped - bulkStatus.read) + bulkRows.sumOf { it.count }
 
     /** Set while "Discard N unsaved cards?" waits for the collector's answer. */
     var pendingDiscard by mutableStateOf<PendingDiscard?>(null)
@@ -120,8 +135,8 @@ class ScanViewModel(
      * collector's answer first (see [pendingDiscard]).
      */
     fun requestEnd(): Boolean {
-        if (bulkStatus.snapped > 0) {
-            pendingDiscard = PendingDiscard(PendingDiscard.Then.Leave, bulkStatus.snapped)
+        if (unsavedCards > 0) {
+            pendingDiscard = PendingDiscard(PendingDiscard.Then.Leave, unsavedCards)
             return false
         }
         endSession()
@@ -145,15 +160,57 @@ class ScanViewModel(
                 val capture = BulkCapture(Batch(input), photos, viewModelScope)
                 bulk = capture
                 bulkStatusJob = viewModelScope.launch { capture.status.collect { bulkStatus = it } }
+                bulkRowsJob = viewModelScope.launch {
+                    var withThumbnails = emptySet<PhotoId>()
+                    capture.rows.collect { rows ->
+                        bulkRows = rows
+                        val failed = rows.filterIsInstance<BatchRow.Failed>().map { it.photo }.toSet()
+                        (withThumbnails - failed).forEach(photos::dropThumbnail)
+                        withThumbnails = failed
+                    }
+                }
                 mode = ScanMode.Bulk
             }
             ScanMode.Single -> {
-                if (bulkStatus.snapped > 0) {
-                    pendingDiscard = PendingDiscard(PendingDiscard.Then.SwitchToSingle, bulkStatus.snapped)
+                if (unsavedCards > 0) {
+                    pendingDiscard = PendingDiscard(PendingDiscard.Then.SwitchToSingle, unsavedCards)
                 } else {
                     leaveBulk()
                 }
             }
+        }
+    }
+
+    fun showReview() {
+        reviewing = true
+    }
+
+    fun hideReview() {
+        reviewing = false
+    }
+
+    fun pickPrinting(row: BatchRowId, printing: Printing) {
+        val capture = bulk ?: return
+        viewModelScope.launch { capture.pick(row, printing) }
+    }
+
+    fun enterBaseNumber(row: BatchRowId, baseNumber: String) {
+        val capture = bulk ?: return
+        viewModelScope.launch { capture.enterBaseNumber(row, baseNumber) }
+    }
+
+    fun removeRow(row: BatchRowId) {
+        val capture = bulk ?: return
+        viewModelScope.launch { capture.remove(row) }
+    }
+
+    /** Adds the resolved rows to the Collection; failed and ambiguous rows stay for the collector. */
+    fun addAll() {
+        val capture = bulk ?: return
+        viewModelScope.launch {
+            val added = capture.addAll()
+            lastAdded = "Added ${added.size} ${if (added.size == 1) "card" else "cards"} from Bulk Add"
+            if (capture.rows.value.isEmpty()) reviewing = false
         }
     }
 
@@ -172,6 +229,9 @@ class ScanViewModel(
     /** Where the camera should write the next Bulk Add photo. */
     fun newPhoto(): Pair<PhotoId, File> = photos.newPhoto()
 
+    /** The in-memory preview of a failed row's photo, if it is still held. */
+    fun thumbnail(photo: PhotoId): Bitmap? = photos.thumbnails[photo]
+
     fun onPhotoSaved(photo: PhotoId) {
         val capture = bulk
         if (capture == null) photos.release(photo) else capture.snap(photo)
@@ -187,10 +247,14 @@ class ScanViewModel(
     private fun closeBulk() {
         bulkStatusJob?.cancel()
         bulkStatusJob = null
+        bulkRowsJob?.cancel()
+        bulkRowsJob = null
         bulk?.close()
         bulk = null
         photos.dropThumbnails()
         bulkStatus = BulkStatus()
+        bulkRows = emptyList()
+        reviewing = false
         pendingDiscard = null
     }
 

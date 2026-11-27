@@ -74,6 +74,25 @@ class BatchTest {
     }
 
     @Test
+    fun `rows list failed first, then ambiguous, then resolved, each in the order they appeared`() = runTest {
+        val batch = batch(printing("OP01-001"), printing("OP02-001"), printing("OP02-001_p1"), printing("OP03-001"), printing("OP03-001_p1"))
+
+        batch.read(PhotoId(1), "OP01-001")
+        batch.read(PhotoId(2), "OP02-001")
+        batch.read(PhotoId(3), null)
+        batch.read(PhotoId(4), "OP03-001")
+
+        assertEquals(
+            listOf("Failed", "Ambiguous", "Ambiguous", "Resolved"),
+            batch.rows.map { it::class.simpleName },
+        )
+        assertEquals(
+            listOf("OP02-001", "OP03-001"),
+            batch.rows.filterIsInstance<BatchRow.Ambiguous>().map { it.preselected.baseNumber },
+        )
+    }
+
+    @Test
     fun `picking a Printing resolves an ambiguous row and merges it into a row already on that Printing`() = runTest {
         val normal = printing("OP01-001")
         val altArt = printing("OP01-001_p1")

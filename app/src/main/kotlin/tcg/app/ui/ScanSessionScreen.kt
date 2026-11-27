@@ -156,7 +156,7 @@ private fun InputForm(viewModel: ScanViewModel) {
             }
         }
         viewModel.lastAdded?.let { Text(it, color = MaterialTheme.colorScheme.primary) }
-        if (scope != null && (bulkMode || result !is ScanInputResult.SearchResults)) {
+        if (scope != null && (bulkMode || result !is ScanInputResult.SearchResults) && !(bulkMode && viewModel.reviewing)) {
             ScanCameraPane(
                 scope,
                 onRead = viewModel::onRead,
@@ -173,11 +173,20 @@ private fun InputForm(viewModel: ScanViewModel) {
             )
         }
         if (bulkMode) {
+            if (viewModel.reviewing) {
+                BulkReviewList(viewModel, Modifier.weight(1f))
+                return@Column
+            }
             val status = viewModel.bulkStatus
             Text(
                 "${status.snapped} snapped · ${status.read} read · ${status.needsAttention} needs attention",
                 style = MaterialTheme.typography.bodyLarge,
             )
+            Button(
+                onClick = viewModel::showReview,
+                enabled = viewModel.bulkRows.isNotEmpty(),
+                modifier = Modifier.fillMaxWidth(),
+            ) { Text("Review (${viewModel.bulkRows.size})") }
             return@Column
         }
         OutlinedTextField(
@@ -262,7 +271,7 @@ private fun ConfirmationForm(viewModel: ScanViewModel, confirmation: Confirmatio
 
 /** Alternate Arts differ by artwork, so the row shows the Release Product and rarity that tell them apart. */
 @Composable
-private fun PrintingRow(printing: Printing, modifier: Modifier = Modifier) {
+internal fun PrintingRow(printing: Printing, modifier: Modifier = Modifier) {
     Row(
         modifier.fillMaxWidth().padding(12.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp),

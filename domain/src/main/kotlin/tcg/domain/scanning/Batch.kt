@@ -40,8 +40,11 @@ class Batch(private val input: ScanSessionInput) {
     private val entries = mutableListOf<BatchRow>()
     private var nextId = 1L
 
-    /** Failed rows first, in snap order, then the rest in the order they first appeared. */
-    val rows: List<BatchRow> get() = entries.filterIsInstance<BatchRow.Failed>() + entries.filter { it !is BatchRow.Failed }
+    /** Failed rows first, then ambiguous, then resolved; each group in the order its rows first appeared. */
+    val rows: List<BatchRow>
+        get() = entries.filterIsInstance<BatchRow.Failed>() +
+            entries.filterIsInstance<BatchRow.Ambiguous>() +
+            entries.filterIsInstance<BatchRow.Resolved>()
 
     /** Takes in one photo's read; [baseNumber] is null when the photo could not be read. */
     suspend fun read(photo: PhotoId, baseNumber: String?) {

@@ -12,6 +12,8 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.sync.withPermit
+import tcg.domain.OwnedCopy
+import tcg.domain.Printing
 
 /** Where snapped photos live until they are read. */
 interface PhotoSource {
@@ -41,8 +43,12 @@ class BulkCapture(
     private val lock = Mutex()
     private val unreleased = LinkedHashSet<PhotoId>()
     private val state = MutableStateFlow(BulkStatus())
+    private val reviewRows = MutableStateFlow<List<BatchRow>>(emptyList())
 
     val status: StateFlow<BulkStatus> get() = state
+
+    /** The review list as it stands: flagged rows first. Updated after every read and every fix. */
+    val rows: StateFlow<List<BatchRow>> get() = reviewRows
 
     fun snap(photo: PhotoId) {
         synchronized(unreleased) { unreleased += photo }
@@ -53,6 +59,25 @@ class BulkCapture(
             } finally {
                 release(photo)
             }
+        }
+    }
+
+    /** Resolves the ambiguous row [id] to one of its candidates. */
+    suspend fun pick(id: BatchRowId, printing: Printing) = fix { batch.pick(id, printing) }
+
+    /** Re-reads the failed row [id] from a Base Number the collector typed. */
+    suspend fun enterBaseNumber(id: BatchRowId, baseNumber: String) = fix { batch.enterBaseNumber(id, baseNumber) }
+
+    suspend fun remove(id: BatchRowId) = fix { batch.remove(id) }
+
+    /** Adds every resolved row to the Collection; flagged rows stay for the collector. */
+    suspend fun addAll(): List<OwnedCopy> = fix { batch.addAll() }
+
+    private suspend fun <T> fix(change: suspend () -> T): T = lock.withLock {
+        try {
+            change()
+        } finally {
+            publish()
         }
     }
 
@@ -72,8 +97,14 @@ class BulkCapture(
         }
         lock.withLock {
             batch.read(photo, number)
-            state.update { BulkStatus(it.snapped, it.read + 1, batch.rows.count { row -> row !is BatchRow.Resolved }) }
+            publish(readOne = true)
         }
+    }
+
+    private fun publish(readOne: Boolean = false) {
+        val rows = batch.rows
+        reviewRows.value = rows
+        state.update { BulkStatus(it.snapped, it.read + if (readOne) 1 else 0, rows.count { row -> row !is BatchRow.Resolved }) }
     }
 
     private fun release(photo: PhotoId) {

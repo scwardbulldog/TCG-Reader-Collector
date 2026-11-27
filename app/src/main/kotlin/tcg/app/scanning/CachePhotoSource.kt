@@ -77,6 +77,10 @@ class CachePhotoSource(
 
     fun dropThumbnails() = thumbnails.clear()
 
+    fun dropThumbnail(photo: PhotoId) {
+        thumbnails.remove(photo)
+    }
+
     private suspend fun recognise(bitmap: Bitmap): String? =
         recognizer.process(InputImage.fromBitmap(bitmap, 0)).await().lowestBaseNumber(extract)
 

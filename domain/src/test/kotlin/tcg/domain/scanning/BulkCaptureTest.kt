@@ -108,6 +108,80 @@ class BulkCaptureTest {
     }
 
     @Test
+    fun `review rows list flagged rows first and merge repeat reads`() = runTest {
+        val batch = batch(printing("OP01-001"), printing("OP02-001"), printing("OP02-001_p1"))
+        val source = ScriptedSource {
+            when (it.value) {
+                1L, 4L -> "OP01-001"
+                2L -> "OP02-001"
+                else -> null
+            }
+        }
+        val capture = BulkCapture(batch, source, backgroundScope)
+
+        (1L..4L).forEach { capture.snap(PhotoId(it)) }
+        runCurrent()
+
+        val rows = capture.rows.value
+        assertEquals(listOf("Failed", "ambiguous", "resolved"), rows.map { rowKind(it) })
+        assertEquals(2, rows.last().count)
+    }
+
+    private fun rowKind(row: BatchRow) = when (row) {
+        is BatchRow.Failed -> "Failed"
+        is BatchRow.Ambiguous -> "ambiguous"
+        is BatchRow.Resolved -> "resolved"
+    }
+
+    @Test
+    fun `fixing rows updates the review list and what needs attention`() = runTest {
+        val batch = batch(printing("OP01-001"), printing("OP02-001"), printing("OP02-001_p1"), printing("OP03-001"))
+        val source = ScriptedSource {
+            when (it.value) {
+                1L -> "OP02-001"
+                2L -> null
+                else -> "OP99-999"
+            }
+        }
+        val capture = BulkCapture(batch, source, backgroundScope)
+        (1L..3L).forEach { capture.snap(PhotoId(it)) }
+        runCurrent()
+        assertEquals(3, capture.status.value.needsAttention)
+
+        val (typed, dropped) = capture.rows.value.filterIsInstance<BatchRow.Failed>().map { it.id }
+        capture.enterBaseNumber(typed, "op03-001")
+        capture.remove(dropped)
+        val ambiguous = capture.rows.value.filterIsInstance<BatchRow.Ambiguous>().single()
+        capture.pick(ambiguous.id, ambiguous.candidates.last())
+
+        assertEquals(listOf("OP03-001", "OP02-001_p1"), capture.rows.value.map { (it as BatchRow.Resolved).printing.identifier.sourceId })
+        assertEquals(BulkStatus(snapped = 3, read = 3, needsAttention = 0), capture.status.value)
+    }
+
+    @Test
+    fun `Add all through the capture adds the resolved rows, keeps the flagged ones and refreshes the list`() = runTest {
+        val zoro = printing("OP01-001")
+        val batch = batch(zoro, printing("OP02-001"), printing("OP02-001_p1"))
+        val source = ScriptedSource {
+            when (it.value) {
+                1L, 2L -> "OP01-001"
+                3L -> "OP02-001"
+                else -> null
+            }
+        }
+        val capture = BulkCapture(batch, source, backgroundScope)
+        (1L..4L).forEach { capture.snap(PhotoId(it)) }
+        runCurrent()
+
+        val added = capture.addAll()
+
+        assertEquals(2, added.size)
+        assertEquals(2, collection.ownedCopies(zoro.identifier).size)
+        assertEquals(listOf("Failed", "ambiguous"), capture.rows.value.map(::rowKind))
+        assertEquals(BulkStatus(snapped = 4, read = 4, needsAttention = 2), capture.status.value)
+    }
+
+    @Test
     fun `closing stops the reads and releases every photo not yet released`() = runTest {
         val batch = batch(printing("OP01-001"))
         val source = ScriptedSource { "OP01-001" }
