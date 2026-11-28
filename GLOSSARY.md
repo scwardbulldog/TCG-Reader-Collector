@@ -41,7 +41,7 @@ _Avoid_: Manual card, homebrew, user-added card
 
 **Card photo**:
 The collector's own picture of a physical card, kept on a **Custom Printing** so it has an image when the **Catalog** has none. A **Catalog** Printing never has one; its image comes from the **Catalog**.
-_Avoid_: Scan, snapshot, custom image (a Bulk Add snap is a transient photo that is read and discarded, never kept)
+_Avoid_: Scan, snapshot, custom image (a Bulk Add snap is a transient photo that is read and discarded, unless the collector creates a **Custom Printing** from its row, when it becomes that Printing's Card photo)
 
 **No longer in the Catalog**:
 The flag on a **Printing** whose **Owned Copies** remain after a **Catalog** refresh dropped it, or after a restore whose backup carried its details while the **Catalog** lacks it. Its last-known details are kept and shown; unlike an **Unresolved Printing**, the app once had its details.
