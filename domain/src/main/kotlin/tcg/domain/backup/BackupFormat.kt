@@ -25,17 +25,32 @@ import java.time.Instant
 
 class BackupFormatException(message: String, cause: Throwable? = null) : Exception(message, cause)
 
-/** A backup read and validated in full. */
-class ParsedBackup(val snapshot: CollectionSnapshot, val createdAt: Instant)
+/**
+ * A backup's JSON read and validated in full. The [snapshot]'s Custom Printings have no Card photo reference yet:
+ * [photoNames] says which of them list a photo, and under what name in the zip (empty for a version 1 file).
+ */
+class ParsedBackup(
+    val snapshot: CollectionSnapshot,
+    val createdAt: Instant,
+    val version: Int,
+    val photoNames: Map<PrintingIdentifier, String>,
+)
 
 /**
- * The versioned JSON backup file. It holds Owned Copies, Locations and Custom Printings, plus last-known details only for
+ * The versioned collection JSON of a backup. It holds Owned Copies, Locations and Custom Printings, plus last-known details only for
  * Printings flagged No longer in the Catalog (an optional field, so version 1 files still parse): never other Catalog details or images.
+ * Version 2 adds the optional photo name of a Custom Printing, the path of its JPEG in the backup zip; version 1 is the old plain `.json` backup.
  * [parse] checks the whole file and either returns all of it or throws [BackupFormatException].
  */
 object BackupFormat {
     private const val FORMAT = "tcg-collection-backup"
-    private const val SCHEMA_VERSION = 1
+    private const val SCHEMA_VERSION = 2
+    const val PHOTO_FOLDER = "photos/"
+
+    /** The name of a Custom Printing's photo file, in a backup zip (under [PHOTO_FOLDER]) and in the research export. */
+    fun photoFileName(identifier: PrintingIdentifier): String =
+        "${identifier.game.code()}_${identifier.language.code()}_${identifier.sourceId.removePrefix("custom:")}.jpg"
+            .replace(Regex("[^A-Za-z0-9_.-]"), "_")
 
     private val json = Json { prettyPrint = true }
 
@@ -72,6 +87,7 @@ object BackupFormat {
         val sourceId: String,
         val baseNumber: String,
         val label: String,
+        val photo: String? = null,
     )
 
     @Serializable
@@ -89,12 +105,17 @@ object BackupFormat {
         val addedAt: String? = null,
     )
 
+    /** The collection JSON; each Custom Printing with a Card photo lists it under [photoFileName]. */
     fun serialize(snapshot: CollectionSnapshot, createdAt: Instant): String =
-        json.encodeToString(file(snapshot, createdAt.toString()))
+        json.encodeToString(file(snapshot, createdAt.toString()) { PHOTO_FOLDER + photoFileName(it.identifier) })
 
-    /** Identifies the content of a Collection, ignoring when it was written; equal Collections have equal fingerprints. */
+    /**
+     * Identifies the content of a Collection and its Card photos, ignoring when it was written. Equal Collections
+     * have equal fingerprints. A photo counts by its reference, which [tcg.domain.CardPhotoStore] changes on every save, so
+     * adding, replacing or removing one changes the fingerprint without reading any picture.
+     */
     fun fingerprint(snapshot: CollectionSnapshot): String {
-        val bytes = json.encodeToString(file(snapshot, createdAt = "")).toByteArray(Charsets.UTF_8)
+        val bytes = json.encodeToString(file(snapshot, createdAt = "") { it.cardPhoto }).toByteArray(Charsets.UTF_8)
         return MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }
     }
 
@@ -113,17 +134,31 @@ object BackupFormat {
         } catch (e: Exception) {
             null
         } ?: throw BackupFormatException("The backup has no readable version")
-        if (version != SCHEMA_VERSION) throw BackupFormatException("Unsupported backup version $version")
+        if (version != 1 && version != SCHEMA_VERSION) throw BackupFormatException("Unsupported backup version $version")
 
         val file = try {
             json.decodeFromJsonElement(File.serializer(), root)
         } catch (e: Exception) {
             throw BackupFormatException("The backup file is damaged or incomplete", e)
         }
-        return ParsedBackup(snapshot(file), createdAt(file.createdAt))
+        val snapshot = snapshot(file)
+        val photoNames = photoNames(file)
+        if (version == 1 && photoNames.isNotEmpty()) throw BackupFormatException("The backup file is damaged or incomplete")
+        return ParsedBackup(snapshot, createdAt(file.createdAt), version, photoNames)
     }
 
-    private fun file(snapshot: CollectionSnapshot, createdAt: String) = File(
+    private fun photoNames(file: File): Map<PrintingIdentifier, String> {
+        val names = file.customPrintings.mapNotNull { entry ->
+            entry.photo?.let { PrintingIdentifier(game(entry.game), language(entry.language), entry.sourceId) to it }
+        }
+        if (names.any { !it.second.startsWith(PHOTO_FOLDER) || it.second.length == PHOTO_FOLDER.length }) {
+            throw BackupFormatException("The backup lists a Card photo with an invalid name")
+        }
+        if (names.map { it.second }.toSet().size != names.size) throw BackupFormatException("The backup lists the same Card photo twice")
+        return names.toMap()
+    }
+
+    private fun file(snapshot: CollectionSnapshot, createdAt: String, photo: (Printing) -> String?) = File(
         format = FORMAT,
         schemaVersion = SCHEMA_VERSION,
         createdAt = createdAt,
@@ -147,6 +182,7 @@ object BackupFormat {
                 sourceId = it.identifier.sourceId,
                 baseNumber = it.baseNumber,
                 label = it.name,
+                photo = if (it.cardPhoto != null) photo(it) else null,
             )
         },
         lastKnownPrintings = snapshot.lastKnownPrintings

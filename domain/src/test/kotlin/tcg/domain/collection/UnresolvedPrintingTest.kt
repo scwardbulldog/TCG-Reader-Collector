@@ -9,6 +9,8 @@ import tcg.domain.PrintingIdentifier
 import tcg.domain.Variant
 import tcg.domain.backup.CollectionBackup
 import tcg.domain.backup.InMemoryBackupStatusStore
+import tcg.domain.backup.backupFile
+import tcg.domain.backup.restoreFile
 import tcg.domain.catalog.CatalogTarget
 import tcg.domain.catalog.CatalogUpdater
 import tcg.domain.catalog.FakeCatalogSource
@@ -39,9 +41,9 @@ class UnresolvedPrintingTest {
         repeat(2) { other.add(NewOwnedCopy(zoro, location = binder.id)) }
         other.add(NewOwnedCopy(nami))
         other.add(NewOwnedCopy(luffy))
-        val content = CollectionBackup(other, InMemoryBackupStatusStore(), InMemoryCardPhotoStore()).let { it.prepare().content }
+        val content = CollectionBackup(other, InMemoryBackupStatusStore(), InMemoryCardPhotoStore()).backupFile()
         val restore = CollectionBackup(collection, InMemoryBackupStatusStore(), InMemoryCardPhotoStore())
-        restore.restore(restore.validate(content))
+        restore.restoreFile(content)
     }
 
     private suspend fun publishCatalog() {

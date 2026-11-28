@@ -40,8 +40,12 @@ A **Printing** the collector recorded themselves because the **Catalog** has non
 _Avoid_: Manual card, homebrew, user-added card
 
 **Card photo**:
-The collector's own picture of a physical card, kept on a **Custom Printing** so it has an image when the **Catalog** has none. A **Catalog** Printing never has one; its image comes from the **Catalog**.
+The collector's own picture of a physical card, kept on a **Custom Printing** so it has an image when the **Catalog** has none. A **Catalog** Printing never has one; its image comes from the **Catalog**. It travels in the backup, and the **research export** includes it.
 _Avoid_: Scan, snapshot, custom image (a Bulk Add snap is a transient photo that is read and discarded, unless the collector creates a **Custom Printing** from its row, when it becomes that Printing's Card photo)
+
+**Research export**:
+A zip the collector saves by hand, holding a CSV of every **Custom Printing** (Base Number, Language, label, photo file name) and its **Card photo**, to study or share the cards the **Catalog** lacks. It is not a backup and cannot be restored.
+_Avoid_: Custom export, photo export
 
 **No longer in the Catalog**:
 The flag on a **Printing** whose **Owned Copies** remain after a **Catalog** refresh dropped it, or after a restore whose backup carried its details while the **Catalog** lacks it. Its last-known details are kept and shown; unlike an **Unresolved Printing**, the app once had its details.

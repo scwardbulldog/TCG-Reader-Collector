@@ -28,7 +28,7 @@ object CollectionCsv {
     ): String = (listOf(columns) + copies.map { row(it, details[it.printing], locations, englishNames[it.printing]) })
         .joinToString("") { cells -> cells.joinToString(",", transform = ::escape) + "\r\n" }
 
-    private fun escape(cell: String): String =
+    internal fun escape(cell: String): String =
         if (cell.any { it == ',' || it == '"' || it == '\n' || it == '\r' }) "\"" + cell.replace("\"", "\"\"") + "\"" else cell
 
     private fun row(copy: OwnedCopy, printing: Printing?, locations: Map<LocationId, String>, englishName: String?): List<String> {
@@ -51,7 +51,7 @@ object CollectionCsv {
     // The labels below are the export's own contract, so UI wording changes must not alter exported cells.
     private fun Game.code() = name.lowercase()
 
-    private fun Language.code() = when (this) {
+    internal fun Language.code() = when (this) {
         Language.English -> "EN"
         Language.Japanese -> "JP"
     }

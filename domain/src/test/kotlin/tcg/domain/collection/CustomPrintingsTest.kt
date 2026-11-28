@@ -11,6 +11,8 @@ import tcg.domain.backup.CollectionBackup
 import tcg.domain.backup.BackupFormat
 import tcg.domain.backup.BackupFormatException
 import tcg.domain.backup.InMemoryBackupStatusStore
+import tcg.domain.backup.backupFile
+import tcg.domain.backup.restoreFile
 import tcg.domain.catalog.CatalogTarget
 import tcg.domain.catalog.CatalogUpdater
 import tcg.domain.catalog.FakeCatalogSource
@@ -184,11 +186,11 @@ class CustomPrintingsTest {
         val printing = create()
         collection.add(NewOwnedCopy(printing.identifier))
         val backup = CollectionBackup(collection, InMemoryBackupStatusStore(), photos, clock = { Instant.parse("2026-11-27T12:00:00Z") })
-        val content = backup.prepare().content
+        val content = backup.backupFile()
         val fresh = InMemoryCollectionStore()
 
         val restorer = CollectionBackup(fresh, InMemoryBackupStatusStore(), photos)
-        restorer.restore(restorer.validate(content))
+        restorer.restoreFile(content)
 
         val row = CollectionList(fresh, catalog).rows().single()
         assertEquals(printing, row.details)

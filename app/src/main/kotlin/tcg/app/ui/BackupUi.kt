@@ -50,12 +50,33 @@ fun BackupDialogs(viewModel: BackupViewModel, onRestored: (copies: Int) -> Unit)
             text = {
                 Text(
                     "This backup, saved ${plan.createdAt}, holds ${plan.copyCount} Owned Copies and ${plan.locationCount} Locations. " +
-                        "Restoring replaces your whole current Collection with it, and the current one cannot be recovered.",
+                        "Restoring replaces your whole current Collection with it, and the current one cannot be recovered.\n\n" +
+                        if (plan.keepsExistingPhotos) {
+                            "This older backup has no Card photos: photos of Custom Printings it contains stay, and all other Card photos on this phone are deleted."
+                        } else {
+                            "It holds ${plan.photoCount} Card ${if (plan.photoCount == 1) "photo" else "photos"}. " +
+                                "Restoring replaces all Card photos on this phone with them."
+                        },
                 )
             },
             confirmButton = {
                 TextButton(onClick = { viewModel.confirmRestore(onRestored) }) { Text("Replace Collection") }
             },
+            dismissButton = { TextButton(onClick = viewModel::cancelRestore) { Text("Cancel") } },
+        )
+    }
+    viewModel.photoProblems?.let { problems ->
+        AlertDialog(
+            onDismissRequest = viewModel::cancelRestore,
+            title = { Text("Some Card photos can't be restored") },
+            text = {
+                Text(
+                    "${problems.affectedPhotos} Card ${if (problems.affectedPhotos == 1) "photo" else "photos"} in this backup " +
+                        "${if (problems.affectedPhotos == 1) "is" else "are"} missing or damaged.\n\n" +
+                        "You can restore everything else; the Custom Printings affected will have no photo. Your Collection was not changed.",
+                )
+            },
+            confirmButton = { TextButton(onClick = viewModel::restoreWithoutThosePhotos) { Text("Restore without those photos") } },
             dismissButton = { TextButton(onClick = viewModel::cancelRestore) { Text("Cancel") } },
         )
     }

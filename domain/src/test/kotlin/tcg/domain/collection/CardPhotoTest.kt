@@ -8,8 +8,6 @@ import tcg.domain.NewOwnedCopy
 import tcg.domain.Printing
 import tcg.domain.PrintingIdentifier
 import tcg.domain.Variant
-import tcg.domain.backup.CollectionBackup
-import tcg.domain.backup.InMemoryBackupStatusStore
 import tcg.domain.catalog.InMemoryCatalogStore
 import tcg.domain.scanning.InMemoryLanguageStore
 import tcg.domain.scanning.ScanSession
@@ -20,7 +18,6 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertNotEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
-import kotlin.test.assertTrue
 
 class CardPhotoTest {
     private val collection = InMemoryCollectionStore()
@@ -185,16 +182,5 @@ class CardPhotoTest {
         assertFailsWith<IllegalArgumentException> {
             Printing(catalogued, "OP01-001", "", "", "Roronoa Zoro", "", Variant.Normal, cardPhoto = "x")
         }
-    }
-
-    @Test
-    fun `a restore leaves no photos behind, since it replaces every Custom Printing`() = runTest {
-        create(photo = "shot-1")
-        val backup = CollectionBackup(collection, InMemoryBackupStatusStore(), photos)
-
-        backup.restore(backup.validate(backup.prepare().content))
-
-        assertEquals(0, photos.count)
-        assertTrue(collection.snapshot().customPrintings.all { it.cardPhoto == null })
     }
 }

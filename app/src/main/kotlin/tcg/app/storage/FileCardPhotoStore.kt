@@ -8,6 +8,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import tcg.domain.CardPhotoStore
 import tcg.domain.PrintingIdentifier
+import tcg.domain.StagedPhotos
 import java.io.File
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption
@@ -54,6 +55,48 @@ class FileCardPhotoStore(context: Context) : CardPhotoStore {
     override suspend fun deleteAll() {
         withContext(Dispatchers.IO) { folder.listFiles()?.forEach { it.delete() } }
     }
+
+    override suspend fun read(printing: PrintingIdentifier): ByteArray? = withContext(Dispatchers.IO) {
+        File(folder, fileName(printing)).takeIf { it.isFile }?.readBytes()
+    }
+
+    /** Writes [photos] to a staging folder beside the photo folder; [StagedPhotos.commit] then swaps them in. */
+    override suspend fun stage(photos: Map<PrintingIdentifier, ByteArray>, keep: Set<PrintingIdentifier>): StagedPhotos =
+        withContext(Dispatchers.IO) {
+            val staging = File(folder.parentFile, "$FOLDER.staging")
+            staging.deleteRecursively()
+            staging.mkdirs()
+            try {
+                photos.forEach { (printing, bytes) -> File(staging, fileName(printing)).writeBytes(bytes) }
+            } catch (e: Throwable) {
+                staging.deleteRecursively()
+                throw e
+            }
+            val now = System.currentTimeMillis()
+            val kept = keep.map { it to File(folder, fileName(it)) }.filter { it.second.isFile }
+            val newReferences = photos.keys.associateWith { "${fileName(it)}@$now" } +
+                kept.associate { (printing, file) -> printing to "${file.name}@${file.lastModified()}" }
+            val keptNames = kept.map { it.second.name }.toSet()
+
+            object : StagedPhotos {
+                override val references = newReferences
+
+                override suspend fun commit() {
+                    withContext(Dispatchers.IO) {
+                        folder.mkdirs()
+                        folder.listFiles()?.filter { it.name !in keptNames }?.forEach { it.delete() }
+                        staging.listFiles()?.forEach {
+                            Files.move(it.toPath(), File(folder, it.name).toPath(), StandardCopyOption.REPLACE_EXISTING)
+                        }
+                        staging.deleteRecursively()
+                    }
+                }
+
+                override suspend fun discard() {
+                    withContext(Dispatchers.IO) { staging.deleteRecursively() }
+                }
+            }
+        }
 
     private fun decode(source: Uri): Bitmap =
         ImageDecoder.decodeBitmap(ImageDecoder.createSource(contentResolver, source)) { decoder, info, _ ->

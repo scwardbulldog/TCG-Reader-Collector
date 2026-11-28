@@ -12,6 +12,7 @@ import tcg.domain.Game
 import tcg.domain.Language
 import tcg.domain.PrintingIdentifier
 import java.io.File
+import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
 import kotlin.test.assertNotEquals
 import kotlin.test.assertNotNull
@@ -78,6 +79,45 @@ class FileCardPhotoStoreTest {
         val again = store.save(milk, "file://${capture.path}")
         store.deleteAll()
         assertNull(store.resolve(again))
+    }
+
+    @Test
+    fun a_staged_set_changes_nothing_until_committed_and_then_is_exactly_the_staged_and_kept_photos() = runTest {
+        val other = PrintingIdentifier(Game.OnePiece, Language.English, "custom:2")
+        val incoming = PrintingIdentifier(Game.OnePiece, Language.Japanese, "custom:3")
+        writeCapture(400, 600)
+        store.save(milk, "file://${capture.path}")
+        writeCapture(400, 600)
+        store.save(other, "file://${capture.path}")
+        val photo = byteArrayOf(1, 2, 3)
+
+        val staged = store.stage(mapOf(incoming to photo), keep = setOf(milk))
+
+        assertNull(store.read(incoming))
+        assertNotNull(store.read(other))
+
+        staged.commit()
+
+        assertContentEquals(photo, store.read(incoming))
+        assertNotNull(store.read(milk))
+        assertNull(store.read(other))
+        assertNotNull(store.resolve(assertNotNull(staged.references[milk])))
+        assertNotNull(store.resolve(assertNotNull(staged.references[incoming])))
+        assertEquals(2, File(context.filesDir, "card-photos").listFiles()?.size)
+        assertEquals(false, File(context.filesDir, "card-photos.staging").exists())
+    }
+
+    @Test
+    fun a_discarded_staged_set_leaves_the_photos_as_they_were() = runTest {
+        writeCapture(400, 600)
+        store.save(milk, "file://${capture.path}")
+        val before = store.read(milk)
+
+        store.stage(mapOf(PrintingIdentifier(Game.OnePiece, Language.English, "custom:9") to byteArrayOf(9)), keep = emptySet()).discard()
+
+        assertContentEquals(before, store.read(milk))
+        assertEquals(1, File(context.filesDir, "card-photos").listFiles()?.size)
+        assertEquals(false, File(context.filesDir, "card-photos.staging").exists())
     }
 
     private fun writeCapture(width: Int, height: Int) {

@@ -54,6 +54,7 @@ import tcg.domain.isCustom
 class CollectionActions(
     val onAdd: () -> Unit,
     val onExportCsv: () -> Unit,
+    val onExportResearch: () -> Unit,
     val onBackup: () -> Unit,
     val onRestore: () -> Unit,
     val onUpdateCatalog: () -> Unit,
@@ -88,6 +89,7 @@ fun CollectionScreen(
                     IconButton(onClick = { menuOpen = true }) { Icon(Icons.Default.MoreVert, "Menu") }
                     DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
                         MenuEntry("Export CSV", onDismiss = { menuOpen = false }, onClick = actions.onExportCsv)
+                        MenuEntry("Export Custom Printings (research)", onDismiss = { menuOpen = false }, onClick = actions.onExportResearch)
                         MenuEntry("Backup", onDismiss = { menuOpen = false }, onClick = actions.onBackup)
                         MenuEntry("Restore", onDismiss = { menuOpen = false }, onClick = actions.onRestore)
                         MenuEntry("Manage Locations", onDismiss = { menuOpen = false }, onClick = viewModel::openManageLocations)

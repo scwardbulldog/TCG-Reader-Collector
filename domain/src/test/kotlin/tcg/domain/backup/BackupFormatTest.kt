@@ -150,11 +150,36 @@ class BackupFormatTest {
 
     @Test
     fun `an unsupported schema version is rejected, even if the rest of the file has changed shape`() {
-        val future = """{"format":"tcg-collection-backup","schemaVersion":2,"somethingNew":[]}"""
+        val future = """{"format":"tcg-collection-backup","schemaVersion":3,"somethingNew":[]}"""
 
         val error = assertFailsWith<BackupFormatException> { BackupFormat.parse(future) }
 
-        assertEquals(true, error.message?.contains("version 2"))
+        assertEquals(true, error.message?.contains("version 3"))
+    }
+
+    @Test
+    fun `a Custom Printing lists its photo by name, and the name is validated`() {
+        val milk = Printing(PrintingIdentifier(Game.OnePiece, Language.English, "custom:a b"), "OP01-001", "Custom", "", "Milk", "", null, cardPhoto = "ref@1")
+        val json = BackupFormat.serialize(snapshot.copy(customPrintings = listOf(milk)), createdAt)
+
+        val parsed = BackupFormat.parse(json)
+
+        assertEquals(2, parsed.version)
+        assertEquals(mapOf(milk.identifier to "photos/onepiece_en_a_b.jpg"), parsed.photoNames)
+        assertEquals(null, parsed.snapshot.customPrintings.single().cardPhoto)
+        listOf("photos/", "elsewhere/x.jpg").forEach {
+            assertFailsWith<BackupFormatException> { BackupFormat.parse(json.replace("photos/onepiece_en_a_b.jpg", it)) }
+        }
+    }
+
+    @Test
+    fun `a Card photo changes the fingerprint, and a retake changes it again`() {
+        val milk = Printing(PrintingIdentifier(Game.OnePiece, Language.English, "custom:1"), "OP01-001", "Custom", "", "Milk", "", null)
+        val without = snapshot.copy(customPrintings = listOf(milk))
+        val first = snapshot.copy(customPrintings = listOf(milk.copy(cardPhoto = "p@1")))
+        val retaken = snapshot.copy(customPrintings = listOf(milk.copy(cardPhoto = "p@2")))
+
+        assertEquals(3, listOf(without, first, retaken).map(BackupFormat::fingerprint).toSet().size)
     }
 
     @Test

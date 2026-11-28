@@ -59,6 +59,28 @@ interface CardPhotoStore {
 
     /** Deletes every photo. */
     suspend fun deleteAll()
+
+    /** The JPEG bytes of the photo of [printing]; null if it has none. */
+    suspend fun read(printing: PrintingIdentifier): ByteArray?
+
+    /**
+     * Prepares a whole new set of photos without touching the current ones: [photos] are the new JPEGs, and the
+     * current photos of the Printings in [keep] stay. Nothing changes until [StagedPhotos.commit]; after it the
+     * store holds exactly the staged and kept photos. Throws if the photos cannot be staged, changing nothing.
+     */
+    suspend fun stage(photos: Map<PrintingIdentifier, ByteArray>, keep: Set<PrintingIdentifier>): StagedPhotos
+}
+
+/** A new set of Card photos waiting to replace the current ones, as the [CardPhotoStore] understands it. */
+interface StagedPhotos {
+    /** The references the Printings will have once [commit]ted: the staged photos and the kept ones that exist. */
+    val references: Map<PrintingIdentifier, String>
+
+    /** Makes the staged photos the only photos (plus the kept ones). */
+    suspend fun commit()
+
+    /** Throws the staged photos away. Safe to call after [commit] or more than once. */
+    suspend fun discard()
 }
 
 /**

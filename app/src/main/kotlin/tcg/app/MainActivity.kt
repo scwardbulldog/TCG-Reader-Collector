@@ -52,13 +52,11 @@ import tcg.domain.catalog.CatalogUpdater
 import tcg.domain.backup.CollectionBackup
 import tcg.domain.collection.CardView
 import tcg.domain.collection.CollectionExport
+import tcg.domain.collection.ResearchExport
 import tcg.domain.collection.CollectionList
 import tcg.domain.collection.PrintingDetail
 import tcg.domain.collection.PrintingTitles
 import java.io.IOException
-import java.nio.ByteBuffer
-import java.nio.charset.CharacterCodingException
-import java.nio.charset.CodingErrorAction
 import java.time.LocalDate
 
 class MainActivity : ComponentActivity() {
@@ -69,7 +67,10 @@ class MainActivity : ComponentActivity() {
     private val exportTarget = registerForActivityResult(ActivityResultContracts.CreateDocument("text/csv")) { uri ->
         if (uri != null) exportCsv(uri)
     }
-    private val backupTarget = registerForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
+    private val researchTarget = registerForActivityResult(ActivityResultContracts.CreateDocument("application/zip")) { uri ->
+        if (uri != null) exportResearch(uri)
+    }
+    private val backupTarget = registerForActivityResult(ActivityResultContracts.CreateDocument("application/zip")) { uri ->
         if (uri != null) saveBackup(uri)
     }
     private val restoreSource = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
@@ -108,7 +109,8 @@ class MainActivity : ComponentActivity() {
                         snackbarHostState = catalogMessages,
                         onUpdateCatalog = ::updateCatalog,
                         onExportCsv = { exportTarget.launch("tcg-collection-${LocalDate.now()}.csv") },
-                        onBackup = { backupTarget.launch("tcg-collection-backup-${LocalDate.now()}.json") },
+                        onExportResearch = { researchTarget.launch("tcg-custom-printings-${LocalDate.now()}.zip") },
+                        onBackup = { backupTarget.launch("tcg-collection-backup-${LocalDate.now()}.zip") },
                         onRestore = { restoreSource.launch(arrayOf("*/*")) },
                     )
                 }
@@ -119,10 +121,10 @@ class MainActivity : ComponentActivity() {
     private fun saveBackup(uri: Uri) {
         lifecycleScope.launch {
             val message = try {
-                backupViewModel.saveBackup { content ->
+                backupViewModel.saveBackup { prepared ->
                     withContext(Dispatchers.IO) {
                         val stream = contentResolver.openOutputStream(uri, "wt") ?: throw IOException("Cannot open $uri")
-                        stream.bufferedWriter(Charsets.UTF_8).use { it.write(content) }
+                        stream.buffered().use { prepared.writeTo(it) }
                     }
                 }
                 "Backup saved"
@@ -137,26 +139,24 @@ class MainActivity : ComponentActivity() {
 
     private fun readBackupFile(uri: Uri) {
         lifecycleScope.launch {
-            try {
-                val content = withContext(Dispatchers.IO) {
-                    val stream = contentResolver.openInputStream(uri) ?: throw IOException("Cannot open the file")
-                    val bytes = stream.use { it.readNBytes(MAX_BACKUP_BYTES + 1) }
-                    if (bytes.size > MAX_BACKUP_BYTES) throw IOException("The file is too large to be a backup")
-                    // Strict decoding: a damaged file must fail here, not restore with substituted characters.
-                    Charsets.UTF_8.newDecoder()
-                        .onMalformedInput(CodingErrorAction.REPORT)
-                        .onUnmappableCharacter(CodingErrorAction.REPORT)
-                        .decode(ByteBuffer.wrap(bytes))
-                        .toString()
+            backupViewModel.onFilePicked { contentResolver.openInputStream(uri) ?: throw IOException("Cannot open the file") }
+        }
+    }
+
+    private fun exportResearch(uri: Uri) {
+        lifecycleScope.launch {
+            val message = try {
+                withContext(Dispatchers.IO) {
+                    val stream = contentResolver.openOutputStream(uri, "wt") ?: throw IOException("Cannot open $uri")
+                    stream.buffered().use { ResearchExport(database.collectionStore(), cardPhotos).writeTo(it) }
                 }
-                backupViewModel.onFileRead(content)
+                "Exported the Custom Printings for research"
             } catch (e: CancellationException) {
                 throw e
-            } catch (e: CharacterCodingException) {
-                backupViewModel.onFileUnreadable("The file is damaged: it is not valid text.")
             } catch (e: Exception) {
-                backupViewModel.onFileUnreadable(e.message ?: "The file could not be read.")
+                "Research export failed: ${e.message ?: "could not write the file"}"
             }
+            catalogMessages.showSnackbar(message)
         }
     }
 
@@ -218,8 +218,6 @@ private val stackSaver = listSaver<List<Destination>, String>(
     },
 )
 
-private const val MAX_BACKUP_BYTES = 64 * 1024 * 1024
-
 @Composable
 private fun CollectionApp(
     database: AppDatabase,
@@ -229,6 +227,7 @@ private fun CollectionApp(
     snackbarHostState: SnackbarHostState,
     onUpdateCatalog: () -> Unit,
     onExportCsv: () -> Unit,
+    onExportResearch: () -> Unit,
     onBackup: () -> Unit,
     onRestore: () -> Unit,
 ) {
@@ -263,6 +262,7 @@ private fun CollectionApp(
             actions = CollectionActions(
                 onAdd = { scanning = true },
                 onExportCsv = onExportCsv,
+                onExportResearch = onExportResearch,
                 onBackup = onBackup,
                 onRestore = onRestore,
                 onUpdateCatalog = onUpdateCatalog,
