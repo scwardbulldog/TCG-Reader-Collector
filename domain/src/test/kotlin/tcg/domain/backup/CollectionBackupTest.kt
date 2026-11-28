@@ -5,6 +5,7 @@ import tcg.domain.CollectionSnapshot
 import tcg.domain.CollectionStore
 import tcg.domain.Condition
 import tcg.domain.Game
+import tcg.domain.InMemoryCardPhotoStore
 import tcg.domain.Language
 import tcg.domain.NewOwnedCopy
 import tcg.domain.PrintingIdentifier
@@ -24,7 +25,7 @@ class CollectionBackupTest {
     private var now = Instant.parse("2026-11-26T18:00:00Z")
     private val collection = InMemoryCollectionStore()
     private val status = InMemoryBackupStatusStore()
-    private val backup = CollectionBackup(collection, status, clock = { now })
+    private val backup = CollectionBackup(collection, status, InMemoryCardPhotoStore(), clock = { now })
 
     private suspend fun seed() {
         val binder = collection.createLocation("Binder 1")
@@ -46,7 +47,7 @@ class CollectionBackupTest {
         val original = collection.snapshot()
         val fresh = InMemoryCollectionStore()
 
-        val restored = CollectionBackup(fresh, InMemoryBackupStatusStore())
+        val restored = CollectionBackup(fresh, InMemoryBackupStatusStore(), InMemoryCardPhotoStore())
         restored.restore(restored.validate(content))
 
         assertEquals(original, fresh.snapshot())
@@ -84,7 +85,7 @@ class CollectionBackupTest {
         collection.add(NewOwnedCopy(nami))
         val before = collection.snapshot()
         val statusBefore = status.status
-        val failing = CollectionBackup(FailingReplaceStore(collection), status, clock = { now })
+        val failing = CollectionBackup(FailingReplaceStore(collection), status, InMemoryCardPhotoStore(), clock = { now })
 
         assertFailsWith<IOException> { failing.restore(failing.validate(content)) }
 
@@ -164,7 +165,7 @@ class CollectionBackupTest {
     fun `a restore on a fresh install brings the reminder even though no backup was ever written there`() = runTest {
         seed()
         val content = backUp()
-        val fresh = CollectionBackup(InMemoryCollectionStore(), InMemoryBackupStatusStore())
+        val fresh = CollectionBackup(InMemoryCollectionStore(), InMemoryBackupStatusStore(), InMemoryCardPhotoStore())
 
         fresh.restore(fresh.validate(content))
 

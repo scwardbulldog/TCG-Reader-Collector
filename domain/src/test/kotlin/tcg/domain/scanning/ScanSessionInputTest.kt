@@ -4,6 +4,7 @@ import kotlinx.coroutines.test.runTest
 import tcg.domain.CatalogStore
 import tcg.domain.Condition
 import tcg.domain.Game
+import tcg.domain.InMemoryCardPhotoStore
 import tcg.domain.Language
 import tcg.domain.Location
 import tcg.domain.Printing
@@ -39,7 +40,7 @@ class ScanSessionInputTest {
     ): Pair<ScanSessionInput, Location> {
         val binder = collection.createLocation("Binder 1")
         val session = ScanSession(Game.OnePiece, InMemoryLanguageStore(language))
-        return ScanSessionInput(session, catalog, collection) to binder
+        return ScanSessionInput(session, catalog, collection, InMemoryCardPhotoStore()) to binder
     }
 
     @Test

@@ -24,8 +24,11 @@ Each interface below is defined in `domain` and implemented in `app`; tests use 
 | `CardScanner` | Reading Base Numbers from the live camera | `CameraXCardScanner` | `FakeCardScanner` |
 | `PhotoSource` | Reading a Base Number from a Bulk Add photo, and deleting it | `CachePhotoSource` | `ScriptedSource`, private to `BulkCaptureTest` |
 | `LanguageStore` | The remembered scan Language | `SharedPreferencesLanguageStore` | `InMemoryLanguageStore` |
+| `CardPhotoStore` | Keeping, finding and deleting the Card photo of a Custom Printing | `FileCardPhotoStore` | `InMemoryCardPhotoStore` |
 
 The Catalog and the Collection are stored apart: a Catalog refresh never touches the Collection's Owned Copies or Locations ([ADR 0003](adr/0003-phone-only-storage-no-backend.md)). Catalog and Custom Printings share one `printing` table, told apart by `origin`. A refresh is a single transaction in `CatalogDao.replaceAll`, planned by the pure `CatalogRefresh`: a dropped Printing that an Owned Copy uses is kept and flagged **No longer in the Catalog**, an unused one is deleted, a listed one takes the new details and clears the flag, and Custom rows are never touched. The JSON backup carries the last-known details of flagged rows (an optional `lastKnownPrintings` field, `schemaVersion` stays 1); a restore inserts them as flagged rows only where the Catalog has no row for that Printing, so the Catalog's details win. Room migration 4 to 5 builds the table from `known_printing` ([v2 spec](spec/v2.md) sections 4 and 5, [ADR 0004](adr/0004-v2-card-model-derived-card-bandai-authoritative.md)). Migration 5 to 6 adds `catalog_version.generatedAt` (the Catalog file's `generatedAt`, shown as the Catalog date: the oldest across languages) and clears the stored ETag so the next launch re-downloads. Deleting a Location sets its copies to Location None in one transaction.
+
+A Custom Printing's **Card photo** is one JPEG (long edge at most 1600 px) in the app-private `files/card-photos/`, named by the Printing's identifier; `Printing.cardPhoto` holds only an opaque reference (`<file name>@<time saved>`) that changes on every save, so a screen reloads the picture after a retake. Room migration 7 to 8 adds the nullable `printing.cardPhoto` column. `CustomPrintings` owns the lifecycle: the photo is saved before the row is written (a failed save leaves the Printing without a photo, or keeps the old one), and it is deleted with the Printing (including the scan-time discard and "Delete both") and when replaced or removed. Change Printing leaves the Printing and its photo alone. The backup does not carry photos (a restore leaves Custom Printings without one and clears the photo folder). Capture is the ML Kit Document Scanner (Play Services, optional: without it the app shows a message and carries on without a photo); its filter mode is the `CARD_PHOTO_SCANNER_MODE` constant in `CardPhotoCapture.kt`.
 
 Search matches a Base Number or name ignoring case and full-width/half-width forms (`containsFolded`); `RoomCatalogStore.search` folds in Kotlin over one Language's rows rather than keeping folded text in the table.
 
@@ -48,7 +51,7 @@ Search matches a Base Number or name ignoring case and full-width/half-width for
 | `tcg.app.storage` | Room database, DAOs, entities, the Room store implementations |
 | `tcg.app.catalog` | `GitHubCatalogSource`: ETag-based download from the private Catalog repo |
 | `tcg.app.scanning` | CameraX + ML Kit scanner, photo cache, Language preference, `ScanDebugLog` (debug builds only) |
-| `tcg.app.ui` | Compose screens and the view models behind them |
+| `tcg.app.ui` | Compose screens and the view models behind them; `CardPhotoCapture.kt` (Document Scanner launch, photo tips) and `PrintingImage` (Card photo, else official image) |
 
 ## How a scan becomes an Owned Copy
 
@@ -74,6 +77,7 @@ Today the state that ties this together (the open confirmation, Language switchi
 | Backup or restore | `domain/.../backup/` (file reading and writing is in `MainActivity`) |
 | Catalog download or import | `app/.../catalog/GitHubCatalogSource.kt`, `domain/.../catalog/CatalogUpdater.kt` |
 | A new table or column | `app/.../storage/` and a Room migration in `AppDatabase.kt`, with a test in `androidTest` |
+| The Card photo of a Custom Printing | `domain/.../collection/CustomPrintings.kt`, `app/.../storage/FileCardPhotoStore.kt`, `app/.../ui/CardPhotoCapture.kt` |
 
 ## Keeping this page true
 

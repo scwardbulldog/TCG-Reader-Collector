@@ -8,6 +8,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -18,6 +19,8 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
+import tcg.domain.Printing
+import java.io.File
 
 private const val CARD_ASPECT_RATIO = 63f / 88f
 
@@ -27,9 +30,31 @@ private const val CARD_ASPECT_RATIO = 63f / 88f
  * Size it with [modifier] (width or height; the card aspect ratio is applied here).
  */
 @Composable
-fun PrintingImage(imageUrl: String?, modifier: Modifier = Modifier) {
-    val url = imageUrl?.takeIf { it.isNotBlank() }
-    var failed by remember(url) { mutableStateOf(false) }
+fun PrintingImage(imageUrl: String?, modifier: Modifier = Modifier) = CardImage(imageUrl?.takeIf { it.isNotBlank() }, modifier)
+
+/**
+ * The picture of [printing]: its Card photo if it has one, else its official image, else a placeholder.
+ * A retake changes the photo's reference, which reloads the picture.
+ */
+@Composable
+fun PrintingImage(printing: Printing?, modifier: Modifier = Modifier) {
+    val photos = LocalCardPhotos.current
+    val photo = printing?.cardPhoto?.let { reference -> photos.resolve(reference)?.let { File(it) } }
+    if (photo != null) {
+        key(printing.cardPhoto) { CardImage(photo, modifier) }
+    } else {
+        CardImage(printing?.imageUrl?.takeIf { it.isNotBlank() }, modifier)
+    }
+}
+
+/** Whether [printing] has anything to show as a picture, so a tap can open it full screen. */
+@Composable
+fun hasPicture(printing: Printing): Boolean =
+    printing.imageUrl.isNotBlank() || printing.cardPhoto?.let { LocalCardPhotos.current.resolve(it) } != null
+
+@Composable
+private fun CardImage(source: Any?, modifier: Modifier) {
+    var failed by remember(source) { mutableStateOf(false) }
     Box(
         modifier
             .aspectRatio(CARD_ASPECT_RATIO)
@@ -37,7 +62,7 @@ fun PrintingImage(imageUrl: String?, modifier: Modifier = Modifier) {
             .background(MaterialTheme.colorScheme.surfaceVariant),
         contentAlignment = Alignment.Center,
     ) {
-        if (url == null || failed) {
+        if (source == null || failed) {
             Text(
                 "No image",
                 style = MaterialTheme.typography.labelSmall,
@@ -46,7 +71,7 @@ fun PrintingImage(imageUrl: String?, modifier: Modifier = Modifier) {
             )
         } else {
             AsyncImage(
-                model = url,
+                model = source,
                 contentDescription = null,
                 contentScale = ContentScale.Fit,
                 onError = { failed = true },

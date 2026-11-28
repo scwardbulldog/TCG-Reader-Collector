@@ -40,7 +40,7 @@ The APK is written to `app/build/outputs/apk/debug/app-debug.apk`.
 2. Check it is listed: `adb devices`.
 3. Install: `.\gradlew.bat :app:installDebug`, or `adb install -r app/build/outputs/apk/debug/app-debug.apk`.
 
-The app needs no account, backend or Play Store services.
+The app needs no account or backend. Everything works without Google Play services except the optional Card photo of a Custom Printing, which uses Google's Document Scanner; without it the app says so and carries on without a photo.
 
 ## Test devices
 

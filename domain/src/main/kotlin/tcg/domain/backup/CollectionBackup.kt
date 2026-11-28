@@ -2,6 +2,7 @@ package tcg.domain.backup
 
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.withContext
+import tcg.domain.CardPhotoStore
 import tcg.domain.CollectionSnapshot
 import tcg.domain.CollectionStore
 import java.time.Instant
@@ -31,6 +32,7 @@ class RestorePlan internal constructor(internal val snapshot: CollectionSnapshot
 class CollectionBackup(
     private val collection: CollectionStore,
     private val status: BackupStatusStore,
+    private val photos: CardPhotoStore,
     private val clock: () -> Instant = Instant::now,
 ) {
     /** Captures the Collection as backup file content. Nothing is recorded until [recordWritten]. */
@@ -53,6 +55,7 @@ class CollectionBackup(
     /**
      * Replaces the whole Collection with [plan]. If that fails the Collection is as it was and so is the
      * reminder state. The reminder is raised first, so a crash in between only ever reminds too much.
+     * Every Custom Printing is replaced by one without a Card photo (a backup carries none), so the photos go too.
      */
     suspend fun restore(plan: RestorePlan) {
         val before = status.load()
@@ -63,6 +66,7 @@ class CollectionBackup(
             withContext(NonCancellable) { status.save(before) }
             throw e
         }
+        photos.deleteAll()
     }
 
     suspend fun reminder(): BackupReminder? {

@@ -40,6 +40,28 @@ interface CatalogStore {
 }
 
 /**
+ * Where the Card photos of Custom Printings are kept: one processed picture per Custom Printing, in storage the
+ * collector's data lives in. The Collection holds only the opaque reference [save] returns.
+ */
+interface CardPhotoStore {
+    /**
+     * Keeps the picture the capture produced at [captured] (a location only the implementation understands) as
+     * the Card photo of [printing], replacing any earlier one, and returns the reference to keep on the Printing.
+     * The reference changes on every save. Throws if the picture cannot be read or kept; the earlier photo then stays.
+     */
+    suspend fun save(printing: PrintingIdentifier, captured: String): String
+
+    /** Where a view can load the photo [reference] points to from; null if it is gone. */
+    fun resolve(reference: String): String?
+
+    /** Deletes the photo of [printing], if it has one. */
+    suspend fun delete(printing: PrintingIdentifier)
+
+    /** Deletes every photo. */
+    suspend fun deleteAll()
+}
+
+/**
  * The Collection: Owned Copies, Locations and Custom Printings. An Owned Copy may reference a
  * Printing identifier the Catalog does not contain.
  */

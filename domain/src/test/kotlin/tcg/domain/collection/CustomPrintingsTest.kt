@@ -2,6 +2,7 @@ package tcg.domain.collection
 
 import kotlinx.coroutines.test.runTest
 import tcg.domain.Game
+import tcg.domain.InMemoryCardPhotoStore
 import tcg.domain.Language
 import tcg.domain.NewOwnedCopy
 import tcg.domain.Printing
@@ -35,10 +36,11 @@ class CustomPrintingsTest {
     private val catalog = InMemoryCatalogStore(collection)
     private val updater = CatalogUpdater(source, catalog, listOf(CatalogTarget(Game.OnePiece, Language.English)))
     private var ids = 0
-    private val custom = CustomPrintings(collection, newId = { "id${ids++}" })
+    private val photos = InMemoryCardPhotoStore()
+    private val custom = CustomPrintings(collection, photos, newId = { "id${ids++}" })
 
     private fun session(language: Language = Language.English): ScanSessionInput =
-        ScanSessionInput(ScanSession(Game.OnePiece, InMemoryLanguageStore(language)), catalog, collection)
+        ScanSessionInput(ScanSession(Game.OnePiece, InMemoryLanguageStore(language)), catalog, collection, photos)
 
     private suspend fun create(base: String = "OP01-001", label: String = "Milk Box Stamp") =
         custom.create(Game.OnePiece, Language.English, base, label)
@@ -163,7 +165,7 @@ class CustomPrintingsTest {
     fun `the Printing detail renames a Custom Printing and can delete it with its last copy`() = runTest {
         val printing = create()
         val copy = collection.add(NewOwnedCopy(printing.identifier))
-        val detail = PrintingDetail(printing.identifier, collection, catalog)
+        val detail = PrintingDetail(printing.identifier, collection, catalog, photos)
         detail.load()
 
         detail.rename("Renamed")
@@ -181,18 +183,18 @@ class CustomPrintingsTest {
     fun `a backup round trip restores a Custom Printing as itself, not an Unresolved Printing`() = runTest {
         val printing = create()
         collection.add(NewOwnedCopy(printing.identifier))
-        val backup = CollectionBackup(collection, InMemoryBackupStatusStore(), clock = { Instant.parse("2026-11-27T12:00:00Z") })
+        val backup = CollectionBackup(collection, InMemoryBackupStatusStore(), photos, clock = { Instant.parse("2026-11-27T12:00:00Z") })
         val content = backup.prepare().content
         val fresh = InMemoryCollectionStore()
 
-        val restorer = CollectionBackup(fresh, InMemoryBackupStatusStore())
+        val restorer = CollectionBackup(fresh, InMemoryBackupStatusStore(), photos)
         restorer.restore(restorer.validate(content))
 
         val row = CollectionList(fresh, catalog).rows().single()
         assertEquals(printing, row.details)
         assertFalse(row.unresolved)
         assertFalse(row.noLongerInCatalog)
-        assertEquals(listOf(printing), CustomPrintings(fresh).forBaseNumber(Game.OnePiece, Language.English, "OP01-001"))
+        assertEquals(listOf(printing), CustomPrintings(fresh, photos).forBaseNumber(Game.OnePiece, Language.English, "OP01-001"))
     }
 
     @Test

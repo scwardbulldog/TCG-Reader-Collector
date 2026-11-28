@@ -3,6 +3,7 @@ package tcg.domain.scanning
 import kotlinx.coroutines.test.runTest
 import tcg.domain.Condition
 import tcg.domain.Game
+import tcg.domain.InMemoryCardPhotoStore
 import tcg.domain.Language
 import tcg.domain.Printing
 import tcg.domain.PrintingIdentifier
@@ -24,7 +25,7 @@ class BatchTest {
     private suspend fun batch(vararg printings: Printing): Batch {
         catalog.replaceCatalog(Game.OnePiece, Language.English, printings.toList())
         val session = ScanSession(Game.OnePiece, InMemoryLanguageStore())
-        return Batch(ScanSessionInput(session, catalog, collection))
+        return Batch(ScanSessionInput(session, catalog, collection, InMemoryCardPhotoStore()))
     }
 
     @Test

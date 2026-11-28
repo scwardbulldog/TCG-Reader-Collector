@@ -312,6 +312,19 @@ class CatalogAndCollectionStorageTest {
     }
 
     @Test
+    fun a_custom_printings_card_photo_reference_is_stored_and_found_again() = runTest {
+        val custom = PrintingIdentifier(Game.OnePiece, Language.English, "custom:1")
+        val milk = printing(custom).copy(baseNumber = "OP01-001", releaseProduct = "Custom", name = "Milk Box Stamp", cardPhoto = "OnePiece_English_1.jpg@1")
+        collection.saveCustomPrinting(milk)
+
+        assertEquals("OnePiece_English_1.jpg@1", collection.customPrinting(custom)?.cardPhoto)
+        assertEquals("OnePiece_English_1.jpg@1", collection.customPrintings(Game.OnePiece, Language.English).single().cardPhoto)
+
+        collection.saveCustomPrinting(milk.copy(cardPhoto = null))
+        assertNull(collection.customPrinting(custom)?.cardPhoto)
+    }
+
+    @Test
     fun a_flagged_printing_is_in_the_snapshot_and_a_restore_brings_it_back_flagged_only_where_the_catalog_lacks_it() = runTest {
         val zoro = PrintingIdentifier(Game.OnePiece, Language.English, "OP01-001_p1")
         val nami = PrintingIdentifier(Game.OnePiece, Language.English, "OP01-016")

@@ -3,6 +3,7 @@ package tcg.domain.collection
 import kotlinx.coroutines.test.runTest
 import tcg.domain.Condition
 import tcg.domain.Game
+import tcg.domain.InMemoryCardPhotoStore
 import tcg.domain.Language
 import tcg.domain.NewOwnedCopy
 import tcg.domain.OwnedCopyId
@@ -19,7 +20,8 @@ class PrintingDetailTest {
     private val collection = InMemoryCollectionStore()
     private val zoro = PrintingIdentifier(Game.OnePiece, Language.English, "OP01-001")
     private val nami = PrintingIdentifier(Game.OnePiece, Language.English, "OP01-016")
-    private val detail = PrintingDetail(zoro, collection, catalog)
+    private val photos = InMemoryCardPhotoStore()
+    private val detail = PrintingDetail(zoro, collection, catalog, photos)
 
     @Test
     fun `lists only the Owned Copies of its Printing with the Catalog entry and Locations`() = runTest {
@@ -116,7 +118,7 @@ class PrintingDetailTest {
         val a = collection.add(NewOwnedCopy(zoro, location = binder.id))
         val b = collection.add(NewOwnedCopy(zoro, location = binder.id))
         collection.add(NewOwnedCopy(zoro, location = bulk.id))
-        val filtered = PrintingDetail(zoro, collection, catalog, location = binder.id)
+        val filtered = PrintingDetail(zoro, collection, catalog, photos, location = binder.id)
 
         filtered.load()
 
@@ -128,7 +130,7 @@ class PrintingDetailTest {
         val binder = collection.createLocation("Binder 1")
         collection.add(NewOwnedCopy(zoro))
         collection.add(NewOwnedCopy(zoro, Condition.Damaged, binder.id, "creased"))
-        val filtered = PrintingDetail(zoro, collection, catalog, location = binder.id)
+                val filtered = PrintingDetail(zoro, collection, catalog, photos, location = binder.id)
         filtered.load()
 
         filtered.addAnotherCopy()
@@ -143,7 +145,7 @@ class PrintingDetailTest {
     fun `Add another copy records when the copy was added`() = runTest {
         val at = java.time.Instant.parse("2026-11-27T12:00:00Z")
         val clocked = InMemoryCollectionStore { at }
-        val d = PrintingDetail(zoro, clocked, catalog)
+        val d = PrintingDetail(zoro, clocked, catalog, photos)
         d.load()
 
         d.addAnotherCopy()
@@ -156,7 +158,7 @@ class PrintingDetailTest {
         val binder = collection.createLocation("Binder 1")
         val bulk = collection.createLocation("Bulk box A")
         val moved = collection.add(NewOwnedCopy(zoro, location = binder.id))
-        val filtered = PrintingDetail(zoro, collection, catalog, location = binder.id)
+        val filtered = PrintingDetail(zoro, collection, catalog, photos, location = binder.id)
         filtered.load()
 
         filtered.save(moved.copy(location = bulk.id))

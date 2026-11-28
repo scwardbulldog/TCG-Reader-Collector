@@ -1,6 +1,7 @@
 package tcg.domain.scanning
 
 import tcg.domain.CatalogStore
+import tcg.domain.CardPhotoStore
 import tcg.domain.CollectionStore
 import tcg.domain.Condition
 import tcg.domain.Language
@@ -53,8 +54,9 @@ class ScanSessionInput(
     val session: ScanSession,
     private val catalog: CatalogStore,
     private val collection: CollectionStore,
+    photos: CardPhotoStore,
 ) {
-    private val customPrintings = CustomPrintings(collection)
+    private val customPrintings = CustomPrintings(collection, photos)
     private val cards = Cards(catalog, collection)
 
     suspend fun lookup(baseNumber: String): ScanLookup {
@@ -76,11 +78,14 @@ class ScanSessionInput(
         return if (matches.isEmpty()) ScanSearch.NoMatch(text.trim()) else ScanSearch.Cards(matches)
     }
 
-    /** Creates a Custom Printing in the session's Language for a no-match and proposes it like any candidate. */
-    suspend fun createCustomPrinting(baseNumber: String, label: String): Printing =
-        customPrintings.create(session.game, session.language, baseNumber, label)
+    /**
+     * Creates a Custom Printing in the session's Language for a no-match and proposes it like any candidate.
+     * With a [photo] it becomes the Card photo; if that cannot be kept the Printing has none.
+     */
+    suspend fun createCustomPrinting(baseNumber: String, label: String, photo: String? = null): Printing =
+        customPrintings.create(session.game, session.language, baseNumber, label, photo)
 
-    /** Drops a Custom Printing the collector created but then did not add, so no unused one is left behind. */
+    /** Drops a Custom Printing the collector created but then did not add, with its photo, so no unused one is left behind. */
     suspend fun discardCustomPrinting(printing: Printing) {
         customPrintings.delete(printing.identifier)
     }

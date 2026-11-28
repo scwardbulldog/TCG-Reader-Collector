@@ -68,7 +68,7 @@ fun ChangePrintingDialog(
             language = current.language.label(),
             baseNumber = card?.baseNumber.orEmpty(),
             onDismiss = { customDialog = false },
-            onSave = { number, label ->
+            onSave = { number, label, _ ->
                 customDialog = false
                 onCreateCustom(number, label)
             },

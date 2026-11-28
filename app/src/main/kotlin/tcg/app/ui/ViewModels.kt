@@ -5,6 +5,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import tcg.domain.Game
@@ -173,6 +174,19 @@ class PrintingDetailViewModel(private val detailFor: (PrintingIdentifier, Locati
     fun confirmDelete(alsoDeleteCustomPrinting: Boolean = false) = launchOn { confirmDelete(alsoDeleteCustomPrinting) }
 
     fun rename(label: String) = launchOn { rename(label) }
+
+    /** Adds or replaces the Card photo from the capture at [captured]; [onFailed] runs if it could not be kept. */
+    fun setPhoto(captured: String, onFailed: () -> Unit) = launchOn {
+        try {
+            setPhoto(captured)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            onFailed()
+        }
+    }
+
+    fun removePhoto() = launchOn { removePhoto() }
 
     /** Moves one Owned Copy to [target], then calls [onMoved] so the caller can open the target's detail. */
     fun move(id: OwnedCopyId, target: PrintingIdentifier, onMoved: (PrintingIdentifier) -> Unit) =

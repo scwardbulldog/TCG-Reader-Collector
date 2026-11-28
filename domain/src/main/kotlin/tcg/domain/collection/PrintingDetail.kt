@@ -4,6 +4,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import tcg.domain.CatalogStore
+import tcg.domain.CardPhotoStore
 import tcg.domain.CollectionStore
 import tcg.domain.Game
 import tcg.domain.Location
@@ -41,11 +42,12 @@ class PrintingDetail(
     val printing: PrintingIdentifier,
     private val collection: CollectionStore,
     private val catalog: CatalogStore,
+    photos: CardPhotoStore,
     private val location: LocationId? = null,
 ) {
     private val mutableState = MutableStateFlow(PrintingDetailState())
     private val printings = PrintingResolver(collection, catalog)
-    private val customPrintings = CustomPrintings(collection)
+    private val customPrintings = CustomPrintings(collection, photos)
     private val cards = Cards(catalog, collection)
     val state: StateFlow<PrintingDetailState> = mutableState.asStateFlow()
     private var shown: Set<OwnedCopyId> = emptySet()
@@ -124,6 +126,18 @@ class PrintingDetail(
     suspend fun rename(label: String) {
         val renamed = customPrintings.rename(printing, label) ?: return
         mutableState.value = mutableState.value.copy(details = renamed)
+    }
+
+    /** Adds or replaces the Card photo of a Custom Printing from [captured]; throws if it cannot be kept, leaving the old photo. */
+    suspend fun setPhoto(captured: String) {
+        val updated = customPrintings.setPhoto(printing, captured) ?: return
+        mutableState.value = mutableState.value.copy(details = updated)
+    }
+
+    /** Removes the Card photo of a Custom Printing, which then shows its `imageUrl` again. */
+    suspend fun removePhoto() {
+        val updated = customPrintings.removePhoto(printing) ?: return
+        mutableState.value = mutableState.value.copy(details = updated)
     }
 
     suspend fun createLocation(name: String): Location {

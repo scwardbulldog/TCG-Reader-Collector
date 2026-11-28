@@ -2,6 +2,7 @@ package tcg.domain.collection
 
 import kotlinx.coroutines.test.runTest
 import tcg.domain.Game
+import tcg.domain.InMemoryCardPhotoStore
 import tcg.domain.Language
 import tcg.domain.NewOwnedCopy
 import tcg.domain.Printing
@@ -80,7 +81,7 @@ class CardViewTest {
     @Test
     fun `a Custom Printing is listed after the Catalog Printings of its Language`() = runTest {
         list(Language.English, "OP01-001", "Roronoa Zoro")
-        val mine = CustomPrintings(collection).create(Game.OnePiece, Language.English, "OP01-001", "Milk Box Stamp")
+        val mine = CustomPrintings(collection, InMemoryCardPhotoStore()).create(Game.OnePiece, Language.English, "OP01-001", "Milk Box Stamp")
         collection.add(NewOwnedCopy(mine.identifier))
 
         val variants = view.of(Game.OnePiece, "OP01-001")!!.languages.single().variants

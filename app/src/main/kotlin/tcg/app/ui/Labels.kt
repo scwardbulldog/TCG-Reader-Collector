@@ -6,6 +6,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.text.TextStyle
+import tcg.domain.CardPhotoStore
 import tcg.domain.Condition
 import tcg.domain.Language
 import tcg.domain.Printing
@@ -15,6 +16,9 @@ import tcg.domain.collection.PrintingTitles
 
 /** Where views get Card names to title a Printing; provided once at the root. */
 val LocalPrintingTitles = staticCompositionLocalOf<PrintingTitles> { error("PrintingTitles not provided") }
+
+/** Where views find the Card photo files of Custom Printings; provided once at the root. */
+val LocalCardPhotos = staticCompositionLocalOf<CardPhotoStore> { error("CardPhotoStore not provided") }
 
 /**
  * The title of [printing]. It shows the Printing's own name first, then the English title and Japanese subtext

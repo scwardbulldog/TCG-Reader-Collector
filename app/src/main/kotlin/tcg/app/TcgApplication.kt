@@ -8,10 +8,14 @@ import coil.memory.MemoryCache
 import tcg.app.scanning.CachePhotoSource
 import tcg.app.scanning.ScanDebugLog
 import tcg.app.storage.AppDatabase
+import tcg.app.storage.FileCardPhotoStore
+import tcg.domain.CardPhotoStore
 import java.io.File
 
 class TcgApplication : Application(), ImageLoaderFactory {
     val database: AppDatabase by lazy { AppDatabase.open(this) }
+
+    val cardPhotos: CardPhotoStore by lazy { FileCardPhotoStore(this) }
 
     /** Debug builds only: what the live scanner saw, for replaying misreads. Null in release builds. */
     val scanDebugLog: ScanDebugLog? by lazy {

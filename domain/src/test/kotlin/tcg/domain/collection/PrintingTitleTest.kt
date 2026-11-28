@@ -3,6 +3,7 @@ package tcg.domain.collection
 import kotlinx.coroutines.test.runTest
 import tcg.domain.Condition
 import tcg.domain.Game
+import tcg.domain.InMemoryCardPhotoStore
 import tcg.domain.Language
 import tcg.domain.NewOwnedCopy
 import tcg.domain.Printing
@@ -59,7 +60,7 @@ class PrintingTitleTest {
     @Test
     fun `a Custom Printing is titled with its label and the English Card name as subtext when the Catalog has one`() = runTest {
         list(Language.English, enZoro)
-        val custom = CustomPrintings(collection, newId = { "c0" })
+        val custom = CustomPrintings(collection, InMemoryCardPhotoStore(), newId = { "c0" })
         val stamped = custom.create(Game.OnePiece, Language.Japanese, "OP01-001", "Milk Box Stamp")
         val lone = custom.create(Game.OnePiece, Language.Japanese, "OP99-001", "Mystery card")
 
@@ -70,7 +71,7 @@ class PrintingTitleTest {
     @Test
     fun `a Custom label never becomes the English name of other Printings`() = runTest {
         list(Language.Japanese, jpZoro)
-        CustomPrintings(collection, newId = { "c0" }).create(Game.OnePiece, Language.English, "OP01-001", "My Zoro")
+        CustomPrintings(collection, InMemoryCardPhotoStore(), newId = { "c0" }).create(Game.OnePiece, Language.English, "OP01-001", "My Zoro")
 
         assertEquals(PrintingTitle("ロロノア・ゾロ", null), titles.of(jpZoro))
     }

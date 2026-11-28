@@ -73,6 +73,8 @@ dependencies {
     implementation("androidx.camera:camera-view:$cameraX")
     // Bundled Latin model: runs on-device with no Play Store services.
     implementation("com.google.mlkit:text-recognition:16.0.1")
+    // Card photo capture (optional): the Document Scanner is a Play Services UI; the app carries on without it.
+    implementation("com.google.android.gms:play-services-mlkit-document-scanner:16.0.0")
 
     // Fetches Printing images from their official URL and caches them on disk; see tcg.app.TcgApplication.
     implementation("io.coil-kt:coil-compose:2.7.0")

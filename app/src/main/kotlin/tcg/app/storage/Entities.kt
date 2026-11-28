@@ -38,6 +38,8 @@ data class PrintingEntity(
     val treatments: String?,
     val origin: PrintingOrigin,
     val noLongerInCatalog: Boolean,
+    /** The [tcg.domain.CardPhotoStore] reference of a Custom Printing's Card photo; always null for a Catalog row. */
+    val cardPhoto: String? = null,
 )
 
 internal fun Printing.toEntity() = PrintingEntity(
@@ -54,6 +56,7 @@ internal fun Printing.toEntity() = PrintingEntity(
     treatments = treatments?.joinToString("\n"),
     origin = if (identifier.isCustom) PrintingOrigin.Custom else PrintingOrigin.Catalog,
     noLongerInCatalog = noLongerInCatalog,
+    cardPhoto = cardPhoto,
 )
 
 internal fun PrintingEntity.toDomain() = Printing(
@@ -67,6 +70,7 @@ internal fun PrintingEntity.toDomain() = Printing(
     productCode = productCode,
     treatments = treatments?.let { if (it.isEmpty()) emptyList() else it.split("\n") },
     noLongerInCatalog = noLongerInCatalog,
+    cardPhoto = cardPhoto,
 )
 
 /** Which source version each stored Catalog came from, so the next check can skip an unchanged file. */

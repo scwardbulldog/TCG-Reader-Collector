@@ -238,10 +238,11 @@ private fun InputForm(viewModel: ScanViewModel) {
                         title = "New custom Printing",
                         language = viewModel.language.label(),
                         baseNumber = base,
+                        withPhoto = true,
                         onDismiss = { customDialog = null },
-                        onSave = { number, label ->
+                        onSave = { number, label, photo ->
                             customDialog = null
-                            viewModel.createCustomPrinting(number, label)
+                            viewModel.createCustomPrinting(number, label, photo)
                         },
                     )
                 }
@@ -286,15 +287,23 @@ private fun ConfirmationForm(viewModel: ScanViewModel, confirmation: Confirmatio
             }
         }
         TextButton(onClick = { customDialog = true }) { Text("Not listed? Create custom Printing") }
+        if (viewModel.photoNotSaved) {
+            Text(
+                "The photo could not be saved. Add it later from the Printing's page.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.error,
+            )
+        }
         if (customDialog) {
             CustomPrintingDialog(
                 title = "New custom Printing",
                 language = viewModel.language.label(),
                 baseNumber = confirmation.candidates.first().baseNumber,
+                withPhoto = true,
                 onDismiss = { customDialog = false },
-                onSave = { number, label ->
+                onSave = { number, label, photo ->
                     customDialog = false
-                    viewModel.createCustomPrinting(number, label)
+                    viewModel.createCustomPrinting(number, label, photo)
                 },
             )
         }
@@ -353,7 +362,7 @@ internal fun PrintingRow(printing: Printing, modifier: Modifier = Modifier, owne
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        PrintingImage(printing.imageUrl, Modifier.width(64.dp))
+        PrintingImage(printing, Modifier.width(64.dp))
         Column(Modifier.weight(1f)) {
             PrintingHeading(rememberPrintingTitle(printing))
             val variant = printing.variant?.label().orEmpty()

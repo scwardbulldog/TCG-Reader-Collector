@@ -2,6 +2,7 @@ package tcg.domain.collection
 
 import kotlinx.coroutines.test.runTest
 import tcg.domain.Game
+import tcg.domain.InMemoryCardPhotoStore
 import tcg.domain.Language
 import tcg.domain.NewOwnedCopy
 import tcg.domain.PrintingIdentifier
@@ -38,8 +39,8 @@ class UnresolvedPrintingTest {
         repeat(2) { other.add(NewOwnedCopy(zoro, location = binder.id)) }
         other.add(NewOwnedCopy(nami))
         other.add(NewOwnedCopy(luffy))
-        val content = CollectionBackup(other, InMemoryBackupStatusStore()).let { it.prepare().content }
-        val restore = CollectionBackup(collection, InMemoryBackupStatusStore())
+        val content = CollectionBackup(other, InMemoryBackupStatusStore(), InMemoryCardPhotoStore()).let { it.prepare().content }
+        val restore = CollectionBackup(collection, InMemoryBackupStatusStore(), InMemoryCardPhotoStore())
         restore.restore(restore.validate(content))
     }
 
@@ -96,7 +97,7 @@ class UnresolvedPrintingTest {
     @Test
     fun `an Unresolved Printing's detail is flagged and its Owned Copies stay editable and deletable`() = runTest {
         restoreOnFreshInstall()
-        val detail = PrintingDetail(zoro, collection, catalog)
+        val detail = PrintingDetail(zoro, collection, catalog, InMemoryCardPhotoStore())
 
         detail.load()
 

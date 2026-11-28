@@ -39,6 +39,7 @@ import tcg.app.ui.CardViewViewModel
 import tcg.app.ui.CollectionActions
 import tcg.app.ui.CollectionScreen
 import tcg.app.ui.CollectionViewModel
+import tcg.app.ui.LocalCardPhotos
 import tcg.app.ui.LocalPrintingTitles
 import tcg.app.ui.PrintingDetailScreen
 import tcg.app.ui.PrintingDetailViewModel
@@ -75,10 +76,11 @@ class MainActivity : ComponentActivity() {
         if (uri != null) readBackupFile(uri)
     }
     private val database get() = (application as TcgApplication).database
+    private val cardPhotos get() = (application as TcgApplication).cardPhotos
 
     private val backupViewModel by viewModels<BackupViewModel> {
         viewModelFactory {
-            initializer { BackupViewModel(CollectionBackup(database.collectionStore(), database.backupStatusStore())) }
+            initializer { BackupViewModel(CollectionBackup(database.collectionStore(), database.backupStatusStore(), cardPhotos)) }
         }
     }
 
@@ -94,7 +96,10 @@ class MainActivity : ComponentActivity() {
         if (savedInstanceState == null) updateCatalog()
         setContent {
             MaterialTheme {
-                CompositionLocalProvider(LocalPrintingTitles provides remember { PrintingTitles(database.catalogStore()) }) {
+                CompositionLocalProvider(
+                    LocalPrintingTitles provides remember { PrintingTitles(database.catalogStore()) },
+                    LocalCardPhotos provides cardPhotos,
+                ) {
                     CollectionApp(
                         database = database,
                         backup = backupViewModel,
@@ -235,11 +240,12 @@ private fun CollectionApp(
     val context = LocalContext.current
 
     val photos = remember { CachePhotoSource(context.applicationContext) }
+    val cardPhotos = (context.applicationContext as TcgApplication).cardPhotos
     val languages = remember { SharedPreferencesLanguageStore(context) }
     val debugLog = (context.applicationContext as TcgApplication).scanDebugLog
 
     if (scanning) {
-        val scanViewModel = viewModel<ScanViewModel>(initializer = { ScanViewModel(catalog, collection, photos, languages, debugLog) })
+        val scanViewModel = viewModel<ScanViewModel>(initializer = { ScanViewModel(catalog, collection, cardPhotos, photos, languages, debugLog) })
         val close = {
             if (scanViewModel.requestEnd()) scanning = false
         }
@@ -291,7 +297,7 @@ private fun CollectionApp(
             }
             is Destination.OpenPrinting -> {
                 val detailViewModel = viewModel<PrintingDetailViewModel>(
-                    initializer = { PrintingDetailViewModel { printing, location -> PrintingDetail(printing, collection, catalog, location) } },
+                    initializer = { PrintingDetailViewModel { printing, location -> PrintingDetail(printing, collection, catalog, cardPhotos, location) } },
                 )
                 // The Collection list's Location filter only applies to a detail opened straight from the list.
                 val locationFilter = if (stack.size == 1) viewModel.filter.location else null

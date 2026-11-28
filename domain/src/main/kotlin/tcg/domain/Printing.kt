@@ -8,6 +8,8 @@ data class PrintingIdentifier(val game: Game, val language: Language, val source
  * [variant] is null for a Custom Printing, and for a flagged row migrated from v1 until a refresh lists it again.
  * [productCode] is for sorting and grouping only. [treatments] null means unknown, not plain.
  * [noLongerInCatalog] marks a Catalog row a refresh dropped while an Owned Copy still uses it; its details are then the last-known ones.
+ * [cardPhoto] is the opaque [CardPhotoStore] reference of a Custom Printing's Card photo; a Catalog Printing never has one,
+ * and it is not [imageUrl], which is Bandai's.
  */
 data class Printing(
     val identifier: PrintingIdentifier,
@@ -20,7 +22,12 @@ data class Printing(
     val productCode: String? = null,
     val treatments: List<String>? = null,
     val noLongerInCatalog: Boolean = false,
-)
+    val cardPhoto: String? = null,
+) {
+    init {
+        require(cardPhoto == null || identifier.isCustom) { "Only a Custom Printing can have a Card photo" }
+    }
+}
 
 /** Custom Printing ids live in this namespace, which no Bandai ID (or ID the Catalog pipeline derives) can enter. */
 const val CUSTOM_ID_PREFIX = "custom:"

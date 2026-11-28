@@ -247,7 +247,7 @@ private fun CollectionRowItem(row: CollectionRow, onClick: () -> Unit) {
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        PrintingImage(row.details?.imageUrl, Modifier.width(48.dp))
+        PrintingImage(row.details, Modifier.width(48.dp))
         Column(Modifier.weight(1f)) {
             val title = row.details?.let { rememberPrintingTitle(it) }
             if (title != null) PrintingHeading(title) else Text(row.printing.sourceId, style = MaterialTheme.typography.titleMedium)

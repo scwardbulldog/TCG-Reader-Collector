@@ -2,6 +2,7 @@ package tcg.domain.collection
 
 import kotlinx.coroutines.test.runTest
 import tcg.domain.Game
+import tcg.domain.InMemoryCardPhotoStore
 import tcg.domain.Language
 import tcg.domain.Printing
 import tcg.domain.PrintingIdentifier
@@ -28,7 +29,7 @@ class CardsTest {
     }
 
     private suspend fun custom(language: Language, baseNumber: String, label: String) =
-        CustomPrintings(collection, newId = { "c${customIds++}" }).create(Game.OnePiece, language, baseNumber, label)
+        CustomPrintings(collection, InMemoryCardPhotoStore(), newId = { "c${customIds++}" }).create(Game.OnePiece, language, baseNumber, label)
 
     @Test
     fun `a Card lists its Printings by Language then Variant, Custom Printings included`() = runTest {

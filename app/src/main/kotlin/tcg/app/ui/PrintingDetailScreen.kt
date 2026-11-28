@@ -1,5 +1,6 @@
 package tcg.app.ui
 
+import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -9,6 +10,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
@@ -36,15 +38,18 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import coil.compose.AsyncImage
 import tcg.domain.Condition
 import tcg.domain.Game
 import tcg.domain.Location
@@ -77,6 +82,12 @@ fun PrintingDetailScreen(
     var renaming by remember { mutableStateOf(false) }
     var changing by remember { mutableStateOf<OwnedCopyId?>(null) }
     var fullScreenImage by remember { mutableStateOf(false) }
+    val context = LocalContext.current
+    val takePhoto = rememberCardPhotoCapture { captured ->
+        viewModel.setPhoto(captured) {
+            Toast.makeText(context, "The photo could not be saved.", Toast.LENGTH_LONG).show()
+        }
+    }
     // Deleting the last Owned Copy leaves nothing to show. Reads the view model afresh because
     // the previous visit's state can still be in the first frame.
     LaunchedEffect(state.loaded, state.copies.isEmpty()) {
@@ -113,8 +124,8 @@ fun PrintingDetailScreen(
                 horizontalArrangement = Arrangement.spacedBy(16.dp),
             ) {
                 PrintingImage(
-                    entry?.imageUrl,
-                    Modifier.width(120.dp).let { if (entry?.imageUrl.isNullOrBlank()) it else it.clickable { fullScreenImage = true } },
+                    entry,
+                    Modifier.width(120.dp).let { if (entry != null && hasPicture(entry)) it.clickable { fullScreenImage = true } else it },
                 )
                 Column {
                     Text(header.joinToString(" · "), style = MaterialTheme.typography.bodyMedium)
@@ -124,7 +135,12 @@ fun PrintingDetailScreen(
                         TextButton(onClick = { onOpenCard(printing.game, entry.baseNumber) }) { Text("All Printings of this Card") }
                     }
                     if (printing.isCustom && entry != null) {
-                        TextButton(onClick = { renaming = true }) { Text("Rename") }
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            TextButton(onClick = { renaming = true }) { Text("Rename") }
+                            TextButton(onClick = takePhoto) { Text(if (entry.cardPhoto == null) "Add photo" else "Retake photo") }
+                            CardPhotoTips()
+                        }
+                        if (entry.cardPhoto != null) TextButton(onClick = viewModel::removePhoto) { Text("Remove photo") }
                     }
                 }
             }
@@ -153,7 +169,7 @@ fun PrintingDetailScreen(
     if (fullScreenImage && entry != null) {
         Dialog(onDismissRequest = { fullScreenImage = false }, properties = DialogProperties(usePlatformDefaultWidth = false)) {
             Box(Modifier.fillMaxSize().background(Color.Black).clickable { fullScreenImage = false }, contentAlignment = Alignment.Center) {
-                PrintingImage(entry.imageUrl, Modifier.fillMaxWidth())
+                PrintingImage(entry, Modifier.fillMaxWidth())
             }
         }
     }
@@ -165,7 +181,7 @@ fun PrintingDetailScreen(
             baseNumber = null,
             initialLabel = entry.name,
             onDismiss = { renaming = false },
-            onSave = { _, label ->
+            onSave = { _, label, _ ->
                 renaming = false
                 viewModel.rename(label)
             },
@@ -311,18 +327,25 @@ internal fun Picker(label: String, value: String, options: List<Pair<String, () 
     }
 }
 
-/** Collects the label of a Custom Printing. With a [baseNumber] it also lets the collector correct it; without one it only renames. */
+/**
+ * Collects the label of a Custom Printing. With a [baseNumber] it also lets the collector correct it; without one it only renames.
+ * With [withPhoto] it also offers an optional Card photo, handed to [onSave] as the capture's location (null if none was taken).
+ */
 @Composable
 internal fun CustomPrintingDialog(
     title: String,
     language: String,
     baseNumber: String?,
     initialLabel: String = "",
+    withPhoto: Boolean = false,
     onDismiss: () -> Unit,
-    onSave: (baseNumber: String, label: String) -> Unit,
+    onSave: (baseNumber: String, label: String, photo: String?) -> Unit,
 ) {
     var number by remember { mutableStateOf(baseNumber.orEmpty()) }
     var label by remember { mutableStateOf(initialLabel) }
+    // The scanner is another activity, so the capture must survive a rotation while it is open.
+    var photo by rememberSaveable { mutableStateOf<String?>(null) }
+    val takePhoto = rememberCardPhotoCapture { photo = it }
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(title) },
@@ -342,10 +365,17 @@ internal fun CustomPrintingDialog(
                     label = { Text("Label, e.g. Milk Box Stamp") },
                     singleLine = true,
                 )
+                if (withPhoto) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedButton(onClick = takePhoto) { Text(if (photo == null) "Take photo" else "Retake photo") }
+                        CardPhotoTips()
+                        photo?.let { AsyncImage(model = it, contentDescription = "Card photo", modifier = Modifier.height(56.dp)) }
+                    }
+                }
             }
         },
         confirmButton = {
-            TextButton(onClick = { onSave(number.trim(), label.trim()) }, enabled = label.isNotBlank() && (baseNumber == null || number.isNotBlank())) {
+            TextButton(onClick = { onSave(number.trim(), label.trim(), photo) }, enabled = label.isNotBlank() && (baseNumber == null || number.isNotBlank())) {
                 Text("Save")
             }
         },

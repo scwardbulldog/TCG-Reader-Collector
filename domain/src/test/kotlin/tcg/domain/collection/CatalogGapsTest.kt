@@ -2,6 +2,7 @@ package tcg.domain.collection
 
 import kotlinx.coroutines.test.runTest
 import tcg.domain.Game
+import tcg.domain.InMemoryCardPhotoStore
 import tcg.domain.Language
 import tcg.domain.NewOwnedCopy
 import tcg.domain.PrintingIdentifier
@@ -88,7 +89,7 @@ class CatalogGapsTest {
     @Test
     fun `a dropped Printing's detail shows last-known details, the flag, and stays editable and deletable`() = runTest {
         ownThenDrop()
-        val detail = PrintingDetail(zoro, collection, catalog)
+        val detail = PrintingDetail(zoro, collection, catalog, InMemoryCardPhotoStore())
 
         detail.load()
 
@@ -182,7 +183,7 @@ class CatalogGapsTest {
 
     @Test
     fun `a refresh never touches a Custom Printing`() = runTest {
-        val custom = CustomPrintings(collection).create(Game.OnePiece, Language.English, "OP01-001", "Milk Box Stamp")
+        val custom = CustomPrintings(collection, InMemoryCardPhotoStore()).create(Game.OnePiece, Language.English, "OP01-001", "Milk Box Stamp")
         collection.add(NewOwnedCopy(custom.identifier))
 
         refresh("v1", "OP01-016" to "Nami")

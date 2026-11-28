@@ -11,6 +11,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import tcg.app.scanning.CachePhotoSource
 import tcg.app.scanning.ScanDebugLog
+import tcg.domain.CardPhotoStore
 import tcg.domain.CatalogStore
 import tcg.domain.CollectionStore
 import tcg.domain.Condition
@@ -66,6 +67,7 @@ sealed interface ScanInputResult {
 class ScanViewModel(
     private val catalog: CatalogStore,
     private val collection: CollectionStore,
+    private val cardPhotos: CardPhotoStore,
     private val photos: CachePhotoSource,
     private val languages: LanguageStore,
     private val debugLog: ScanDebugLog? = null,
@@ -118,6 +120,10 @@ class ScanViewModel(
     var confirmation by mutableStateOf<Confirmation?>(null)
         private set
     private var justCreated: Printing? = null
+
+    /** True when the Custom Printing just created has no Card photo although one was taken, so the screen can say so. */
+    var photoNotSaved by mutableStateOf(false)
+        private set
 
     /** The last add, shown on the input screen so the collector sees it landed, with the copies [undoLastAdd] removes. */
     var lastAdded by mutableStateOf<LastAdded?>(null)
@@ -200,7 +206,7 @@ class ScanViewModel(
         }
     }
 
-    private fun newSessionInput() = ScanSessionInput(ScanSession(Game.OnePiece, languages), catalog, collection)
+    private fun newSessionInput() = ScanSessionInput(ScanSession(Game.OnePiece, languages), catalog, collection, cardPhotos)
 
     /** True while a lookup, search or re-lookup is running, so the screen can show it is working. */
     var searching by mutableStateOf(false)
@@ -423,16 +429,18 @@ class ScanViewModel(
 
     /**
      * Creates a Custom Printing, for a no-match or when none of the proposed Printings is the collector's,
-     * and offers it for confirmation next to the Printings already proposed.
+     * and offers it for confirmation next to the Printings already proposed. A [photo] (the capture's location)
+     * becomes its Card photo; if that cannot be kept the Printing is still created and [photoNotSaved] is set.
      */
-    fun createCustomPrinting(baseNumber: String, label: String) {
+    fun createCustomPrinting(baseNumber: String, label: String, photo: String? = null) {
         val current = sessionInput
         val previous = justCreated
         val proposed = confirmation?.candidates.orEmpty().filter { it.identifier != previous?.identifier }
         discardUnusedCustomPrinting()
         viewModelScope.launch {
-            val printing = current.createCustomPrinting(baseNumber, label)
+            val printing = current.createCustomPrinting(baseNumber, label, photo)
             justCreated = printing
+            photoNotSaved = photo != null && printing.cardPhoto == null
             result = ScanInputResult.None
             confirmation = confirmation?.copy(candidates = proposed + printing, selected = printing)
                 ?: confirmationOf(listOf(printing), printing)
@@ -491,6 +499,7 @@ class ScanViewModel(
     private fun clearInput() {
         lookupJob?.cancel()
         justCreated = null
+        photoNotSaved = false
         query = ""
         result = ScanInputResult.None
         confirmation = null
