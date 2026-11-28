@@ -1,0 +1,11 @@
+# Backup is a zip with Card photos; v1 JSON still restores
+
+A **Card photo** is a processed JPEG of a few hundred KB, too big to embed in the JSON backup of [ADR 0003](0003-phone-only-storage-no-backend.md). The backup is now one zip holding `collection.json` (`schemaVersion` 2) and `photos/<Printing identifier>.jpg`, so a lost phone no longer loses the photos and the file cannot be separated from them. A folder beside a JSON file was rejected: it needs a folder picker and breaks when the file is moved. Plain `.json` v1 backups still restore, without photos.
+
+- **Always a zip.** Even a Collection with no Card photos is backed up as a zip, so there is one format to explain and test.
+- **Restore stays atomic and strict.** A problem in the JSON fails the restore. A photo problem (a listed photo missing or not a valid JPEG) fails it by default, and the collector may choose to restore without the affected photos, leaving those **Custom Printings** with no photo. Photos the zip lists nowhere are ignored. The Collection is replaced before photo files are, so a failed restore changes neither.
+- **The photo folder matches the Collection afterwards.** After restoring a zip, the folder holds exactly the backup's photos. After restoring a v1 JSON, photos for **Printing** identifiers still in the Collection are kept and the rest are deleted. The restore confirmation says photos are replaced.
+- **Backup status counts photos.** The fingerprint includes the photos, so adding, replacing or removing one prompts the backup reminder.
+- **Separate research export.** A manual export of all Custom Printings (a CSV with the photo filename, blank when none) plus their photos, for catalog research. It is not restorable, carries no Owned Copies, Locations or notes, and does not touch the backup status. Photos never reach a third party or the **Catalog** automatically ([ADR 0004](0004-v2-card-model-derived-card-bandai-authoritative.md) is unchanged), and there is still no hosted backend.
+
+Source: [Card photos in backup and export for catalog research](https://github.com/scwardbulldog/TCG-Reader-Collector/issues/76), [Card photo on Custom Printings](https://github.com/scwardbulldog/TCG-Reader-Collector/issues/75).
