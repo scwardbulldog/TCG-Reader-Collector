@@ -164,6 +164,8 @@ class PrintingDetailViewModel(private val detailFor: (PrintingIdentifier, Locati
         detail?.requestDelete(id)
     }
 
+    fun addAnotherCopy() = launchOn { addAnotherCopy() }
+
     fun cancelDelete() {
         detail?.cancelDelete()
     }

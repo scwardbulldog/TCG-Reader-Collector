@@ -15,7 +15,7 @@ import tcg.domain.backup.BackupStatusStore
         PrintingEntity::class, CatalogVersionEntity::class, LocationEntity::class, OwnedCopyEntity::class,
         BackupStatusEntity::class,
     ],
-    version = 6,
+    version = 7,
     exportSchema = true,
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -102,9 +102,16 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        /** Adds the date an Owned Copy was added; existing copies have none. */
+        val MIGRATION_6_7 = object : Migration(6, 7) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `owned_copy` ADD COLUMN `addedAtMillis` INTEGER")
+            }
+        }
+
         fun open(context: Context): AppDatabase =
             Room.databaseBuilder(context, AppDatabase::class.java, "tcg.db")
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7)
                 .build()
 
         fun inMemory(context: Context): AppDatabase =

@@ -12,19 +12,24 @@ import tcg.domain.OwnedCopyId
 import tcg.domain.Printing
 import tcg.domain.PrintingIdentifier
 import tcg.domain.isCustom
+import java.time.Instant
 
 class RoomCollectionStore(private val dao: CollectionDao) : CollectionStore {
     override suspend fun add(copy: NewOwnedCopy): OwnedCopy {
-        val id = dao.insert(copy.toEntity())
-        return OwnedCopy(OwnedCopyId(id), copy.printing, copy.condition, copy.location, copy.notes)
+        val entity = copy.toEntity()
+        val id = dao.insert(entity)
+        return OwnedCopy(OwnedCopyId(id), copy.printing, copy.condition, copy.location, copy.notes, entity.addedAt())
     }
 
     override suspend fun addAll(copies: List<NewOwnedCopy>): List<OwnedCopy> {
-        val ids = dao.insertAll(copies.map { it.toEntity() })
-        return copies.zip(ids) { copy, id ->
-            OwnedCopy(OwnedCopyId(id), copy.printing, copy.condition, copy.location, copy.notes)
+        val entities = copies.map { it.toEntity() }
+        val ids = dao.insertAll(entities)
+        return copies.zip(ids).mapIndexed { index, (copy, id) ->
+            OwnedCopy(OwnedCopyId(id), copy.printing, copy.condition, copy.location, copy.notes, entities[index].addedAt())
         }
     }
+
+    private fun OwnedCopyEntity.addedAt() = addedAtMillis?.let(Instant::ofEpochMilli)
 
     private fun NewOwnedCopy.toEntity() = OwnedCopyEntity(
         game = printing.game,
@@ -33,6 +38,7 @@ class RoomCollectionStore(private val dao: CollectionDao) : CollectionStore {
         condition = condition,
         locationId = location?.value,
         notes = notes,
+        addedAtMillis = System.currentTimeMillis(),
     )
 
     override suspend fun ownedCopies(printing: PrintingIdentifier): List<OwnedCopy> =
@@ -97,6 +103,7 @@ class RoomCollectionStore(private val dao: CollectionDao) : CollectionStore {
                 condition = it.condition,
                 locationId = it.location?.value,
                 notes = it.notes,
+                addedAtMillis = it.addedAt?.toEpochMilli(),
             )
         },
         snapshot.customPrintings.map { it.toEntity() },
@@ -112,4 +119,5 @@ private fun OwnedCopyEntity.toDomain() = OwnedCopy(
     condition = condition,
     location = locationId?.let(::LocationId),
     notes = notes,
+    addedAt = addedAtMillis?.let(Instant::ofEpochMilli),
 )

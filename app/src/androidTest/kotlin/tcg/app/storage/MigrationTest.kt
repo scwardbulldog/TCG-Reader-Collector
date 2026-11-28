@@ -90,7 +90,7 @@ class MigrationTest {
         helper.runMigrationsAndValidate(DB_NAME, 5, true, AppDatabase.MIGRATION_4_5).close()
         val context = ApplicationProvider.getApplicationContext<Context>()
         val db = Room.databaseBuilder(context, AppDatabase::class.java, DB_NAME)
-            .addMigrations(AppDatabase.MIGRATION_1_2, AppDatabase.MIGRATION_2_3, AppDatabase.MIGRATION_3_4, AppDatabase.MIGRATION_4_5, AppDatabase.MIGRATION_5_6)
+            .addMigrations(AppDatabase.MIGRATION_1_2, AppDatabase.MIGRATION_2_3, AppDatabase.MIGRATION_3_4, AppDatabase.MIGRATION_4_5, AppDatabase.MIGRATION_5_6, AppDatabase.MIGRATION_6_7)
             .build()
         try {
             val zoro = PrintingIdentifier(Game.OnePiece, Language.English, "OP01-001")
@@ -125,6 +125,17 @@ class MigrationTest {
 
         helper.runMigrationsAndValidate(DB_NAME, 6, true, AppDatabase.MIGRATION_5_6).use { db ->
             assertEquals(1, count(db, "SELECT COUNT(*) FROM catalog_version WHERE version IS NULL AND generatedAt IS NULL"))
+        }
+    }
+
+    @Test
+    fun migrating_from_6_to_7_adds_the_date_added_with_none_for_existing_copies() {
+        helper.createDatabase(DB_NAME, 6).use { db ->
+            db.execSQL("INSERT INTO owned_copy (game, language, sourceId, condition, locationId, notes) VALUES ('OnePiece', 'English', 'OP01-001', 'NearMint', NULL, 'sleeved')")
+        }
+
+        helper.runMigrationsAndValidate(DB_NAME, 7, true, AppDatabase.MIGRATION_6_7).use { db ->
+            assertEquals(1, count(db, "SELECT COUNT(*) FROM owned_copy WHERE notes = 'sleeved' AND addedAtMillis IS NULL"))
         }
     }
 

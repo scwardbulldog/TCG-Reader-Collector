@@ -118,4 +118,6 @@ data class OwnedCopyEntity(
     val condition: Condition,
     val locationId: Long?,
     val notes: String,
+    /** Epoch milliseconds the copy was added; null for copies that predate it. */
+    val addedAtMillis: Long? = null,
 )

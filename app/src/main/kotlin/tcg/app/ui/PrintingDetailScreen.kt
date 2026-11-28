@@ -1,5 +1,7 @@
 package tcg.app.ui
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -35,10 +37,14 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import tcg.domain.Condition
 import tcg.domain.Game
 import tcg.domain.Location
@@ -49,6 +55,11 @@ import tcg.domain.PrintingIdentifier
 import tcg.domain.collection.productText
 import tcg.domain.collection.treatmentText
 import tcg.domain.isCustom
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import java.time.format.FormatStyle
+
+private val dateFormat: DateTimeFormatter = DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM).withZone(ZoneId.systemDefault())
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -65,6 +76,7 @@ fun PrintingDetailScreen(
     val entry = state.details
     var renaming by remember { mutableStateOf(false) }
     var changing by remember { mutableStateOf<OwnedCopyId?>(null) }
+    var fullScreenImage by remember { mutableStateOf(false) }
     // Deleting the last Owned Copy leaves nothing to show. Reads the view model afresh because
     // the previous visit's state can still be in the first frame.
     LaunchedEffect(state.loaded, state.copies.isEmpty()) {
@@ -100,7 +112,10 @@ fun PrintingDetailScreen(
                 Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                 horizontalArrangement = Arrangement.spacedBy(16.dp),
             ) {
-                PrintingImage(entry?.imageUrl, Modifier.width(120.dp))
+                PrintingImage(
+                    entry?.imageUrl,
+                    Modifier.width(120.dp).let { if (entry?.imageUrl.isNullOrBlank()) it else it.clickable { fullScreenImage = true } },
+                )
                 Column {
                     Text(header.joinToString(" · "), style = MaterialTheme.typography.bodyMedium)
                     if (state.noLongerInCatalog) NoLongerInCatalogFlag()
@@ -128,6 +143,17 @@ fun PrintingDetailScreen(
                         onCreateLocation = viewModel::createLocation,
                     )
                 }
+                item {
+                    OutlinedButton(onClick = viewModel::addAnotherCopy, modifier = Modifier.fillMaxWidth()) { Text("Add another copy") }
+                }
+            }
+        }
+    }
+
+    if (fullScreenImage && entry != null) {
+        Dialog(onDismissRequest = { fullScreenImage = false }, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+            Box(Modifier.fillMaxSize().background(Color.Black).clickable { fullScreenImage = false }, contentAlignment = Alignment.Center) {
+                PrintingImage(entry.imageUrl, Modifier.fillMaxWidth())
             }
         }
     }
@@ -210,6 +236,7 @@ private fun OwnedCopyEditor(
 
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            copy.addedAt?.let { Text("Added ${dateFormat.format(it)}", style = MaterialTheme.typography.labelMedium) }
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Picker(
                     label = "Condition",

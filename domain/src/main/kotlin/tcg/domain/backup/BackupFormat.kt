@@ -86,6 +86,7 @@ object BackupFormat {
         val condition: String,
         val locationId: Long?,
         val notes: String,
+        val addedAt: String? = null,
     )
 
     fun serialize(snapshot: CollectionSnapshot, createdAt: Instant): String =
@@ -136,6 +137,7 @@ object BackupFormat {
                 condition = it.condition.code(),
                 locationId = it.location?.value,
                 notes = it.notes,
+                addedAt = it.addedAt?.toString(),
             )
         },
         customPrintings = snapshot.customPrintings.sortedBy { it.identifier.sourceId }.map {
@@ -185,6 +187,13 @@ object BackupFormat {
                 condition = condition(entry.condition),
                 location = entry.locationId?.let(::LocationId),
                 notes = entry.notes,
+                addedAt = entry.addedAt?.let {
+                    try {
+                        Instant.parse(it)
+                    } catch (e: Exception) {
+                        throw BackupFormatException("Owned Copy ${entry.id} has an invalid date added", e)
+                    }
+                },
             )
         }
         val customPrintings = file.customPrintings.map { entry ->

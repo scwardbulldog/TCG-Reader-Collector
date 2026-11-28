@@ -124,6 +124,34 @@ class PrintingDetailTest {
     }
 
     @Test
+    fun `Add another copy copies the last copy's condition and Location but not its notes`() = runTest {
+        val binder = collection.createLocation("Binder 1")
+        collection.add(NewOwnedCopy(zoro))
+        collection.add(NewOwnedCopy(zoro, Condition.Damaged, binder.id, "creased"))
+        val filtered = PrintingDetail(zoro, collection, catalog, location = binder.id)
+        filtered.load()
+
+        filtered.addAnotherCopy()
+
+        val added = filtered.state.value.copies.last()
+        assertEquals(Triple(Condition.Damaged, binder.id, ""), Triple(added.condition, added.location, added.notes))
+        assertEquals(2, filtered.state.value.copies.size)
+        assertEquals(3, filtered.state.value.totalCopies)
+    }
+
+    @Test
+    fun `Add another copy records when the copy was added`() = runTest {
+        val at = java.time.Instant.parse("2026-11-27T12:00:00Z")
+        val clocked = InMemoryCollectionStore { at }
+        val d = PrintingDetail(zoro, clocked, catalog)
+        d.load()
+
+        d.addAnotherCopy()
+
+        assertEquals(at, d.state.value.copies.single().addedAt)
+    }
+
+    @Test
     fun `an Owned Copy moved out of the filtered Location stays visible while it is edited`() = runTest {
         val binder = collection.createLocation("Binder 1")
         val bulk = collection.createLocation("Bulk box A")

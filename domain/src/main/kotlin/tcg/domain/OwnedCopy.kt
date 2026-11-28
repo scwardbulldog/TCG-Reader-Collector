@@ -1,5 +1,7 @@
 package tcg.domain
 
+import java.time.Instant
+
 enum class Condition { NearMint, LightlyPlayed, ModeratelyPlayed, HeavilyPlayed, Damaged }
 
 @JvmInline
@@ -18,6 +20,8 @@ data class OwnedCopy(
     val condition: Condition,
     val location: LocationId?,
     val notes: String,
+    /** When the copy was added; null for a copy that predates the date being recorded. */
+    val addedAt: Instant? = null,
 )
 
 /**

@@ -7,6 +7,7 @@ import tcg.domain.CatalogStore
 import tcg.domain.CollectionStore
 import tcg.domain.Game
 import tcg.domain.Location
+import tcg.domain.NewOwnedCopy
 import tcg.domain.LocationId
 import tcg.domain.OwnedCopy
 import tcg.domain.OwnedCopyId
@@ -64,6 +65,15 @@ class PrintingDetail(
 
     suspend fun save(copy: OwnedCopy) {
         collection.update(copy)
+        reloadCopies()
+    }
+
+    /** Adds one more Owned Copy with the condition and Location of the last copy shown (Near Mint, no Location if none). */
+    suspend fun addAnotherCopy() {
+        val last = mutableState.value.copies.lastOrNull()
+        val added = if (last == null) collection.add(NewOwnedCopy(printing))
+        else collection.add(NewOwnedCopy(printing, last.condition, last.location))
+        shown = shown + added.id
         reloadCopies()
     }
 

@@ -12,8 +12,9 @@ import tcg.domain.OwnedCopyId
 import tcg.domain.Printing
 import tcg.domain.PrintingIdentifier
 import tcg.domain.isCustom
+import java.time.Instant
 
-class InMemoryCollectionStore : CollectionStore {
+class InMemoryCollectionStore(private val clock: () -> Instant = Instant::now) : CollectionStore {
     private val copies = mutableListOf<OwnedCopy>()
     private val locations = mutableListOf<Location>()
     private val custom = mutableMapOf<PrintingIdentifier, Printing>()
@@ -21,7 +22,7 @@ class InMemoryCollectionStore : CollectionStore {
     private var nextId = 1L
 
     override suspend fun add(copy: NewOwnedCopy): OwnedCopy =
-        OwnedCopy(OwnedCopyId(nextId++), copy.printing, copy.condition, copy.location, copy.notes).also(copies::add)
+        OwnedCopy(OwnedCopyId(nextId++), copy.printing, copy.condition, copy.location, copy.notes, clock()).also(copies::add)
 
     override suspend fun addAll(copies: List<NewOwnedCopy>): List<OwnedCopy> = copies.map { add(it) }
 
@@ -30,7 +31,7 @@ class InMemoryCollectionStore : CollectionStore {
 
     override suspend fun update(copy: OwnedCopy) {
         val index = copies.indexOfFirst { it.id == copy.id }
-        if (index >= 0) copies[index] = copy.copy(printing = copies[index].printing)
+        if (index >= 0) copies[index] = copy.copy(printing = copies[index].printing, addedAt = copies[index].addedAt)
     }
 
     override suspend fun move(id: OwnedCopyId, printing: PrintingIdentifier) {
